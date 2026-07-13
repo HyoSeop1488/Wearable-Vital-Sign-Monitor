@@ -86,8 +86,8 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 │              HiveMQ Public Broker                              │
 │              broker.hivemq.com : 1883                          │
 │                                                                │
-│   Topic: hospital/patient/001/vitals                           │
-│   Topic: hospital/patient/001/alarm                            │
+│          Topic: hospital/patient/001/vitals                    │
+│          Topic: hospital/patient/001/alarm                     │
 └────────────────────────┬───────────────────────────────────────┘
                          │ MQTT Subscribe
                          ▼
