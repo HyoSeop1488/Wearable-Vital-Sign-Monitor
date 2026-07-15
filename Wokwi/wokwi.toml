@@ -1,0 +1,19 @@
+[[package]]
+name = "Adafruit SSD1306"
+version = "2.5.7"
+
+[[package]]
+name = "Adafruit GFX Library"
+version = "1.11.5"
+
+[[package]]
+name = "PubSubClient"
+version = "2.8.0"
+
+[[package]]
+name = "ArduinoJson"
+version = "6.21.2"
+
+[[package]]
+name = "WiFiManager"
+version = "2.0.14"
