@@ -8,7 +8,7 @@
  *
  * Sumber data:
  *   Dataset CSV Kaggle "Human Vital Signs Dataset 2024"
- *   File: vitals_2024.csv (nama pendek agar ≤32 char — SPIFFS limit)
+ *   File: vitals.csv (nama pendek agar ≤32 char — SPIFFS limit)
  *   Kolom: heart_rate, spo2, temperature, timestamp
  *   Dibaca dari SPIFFS, 1 baris per detik, loop ke awal saat EOF.
  *
@@ -16,7 +16,7 @@
  *   1. Buka project di wokwi.com
  *   2. Klik dropdown tab (panah di samping tab terakhir)
  *   3. Pilih "Upload file(s)..."
- *   4. Upload dataset CSV (rename jadi vitals_2024.csv jika perlu)
+ *   4. Upload file vitals.csv
  *   5. File akan muncul sebagai tab baru dan tersedia di SPIFFS
  *
  * Libraries:

@@ -79,7 +79,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 ┌─────────────────────────────────────────────────────────────────┐
 │                        DEVICE LAYER                             │
 │                                                                 │
-│    human_vital_signs_dataset_2024.csv                           │
+│    vitals.csv                                                   │
 │           │                                                     │
 │           ▼                                                     │
 │    SPIFFS → Read row → Parse CSV → Moving Average              │
@@ -167,8 +167,8 @@ Project IOT/
 │   ├── diagram.json            # Wiring diagram Wokwi
 │   ├── libraries.txt           # Daftar library Arduino + versi
 │   ├── wokwi.toml              # Konfigurasi package Wokwi
-│   └── human_vital_signs_dataset_2024.csv
-│                               # Dataset Kaggle (rename ke /vitals_2024.csv)
+│   └── vitals.csv
+│                               # Dataset Kaggle (rename dari human_vital_signs_dataset_2024.csv)
 │
 └── Node-Red/               # Dashboard visualisasi
     └── flows.json              # Node-RED flow siap import
@@ -415,12 +415,12 @@ WiFiManager            @ 2.0.14
    - `MQTT_handler.cpp` → tab **MQTT_handler.cpp**
 5. Upload dataset CSV:
    - Buka tab terakhir → klik dropdown (panah) → pilih **Upload file(s)...**
-   - Upload `Wokwi/human_vital_signs_dataset_2024.csv`
+   - Upload `Wokwi/vitals.csv`
    - File akan muncul sebagai tab baru
 6. Klik **▶ Start Simulation**
 7. Buka **Serial Monitor** untuk melihat output log
 
-> **Catatan:** Nama file CSV akan otomatis terbaca sebagai `/vitals_2024.csv` oleh ESP32. Pastikan file yang diupload telah di-rename sesuai (≤32 karakter karena keterbatasan SPIFFS).
+> **Catatan:** Nama file CSV akan otomatis terbaca sebagai `/vitals.csv` oleh ESP32 (≥32 chars aman).
 
 ---
 

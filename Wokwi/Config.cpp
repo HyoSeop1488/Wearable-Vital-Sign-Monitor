@@ -77,7 +77,7 @@ const unsigned long BUZZER_WARNING_DURATION  = 400;    /* ms */
 /* ------------------------------------------------------------------ */
 /*  Sumber Data CSV (SPIFFS)                                          */
 /* ------------------------------------------------------------------ */
-const char* CSV_FILE_PATH = "/vitals_2024.csv";
+const char* CSV_FILE_PATH = "/vitals.csv";
 const char* DATA_LOG_PATH = "/data_log.csv";
 const size_t DATA_LOG_MAX_LINES = 500;
 const unsigned long OLED_IDLE_TIMEOUT = 30000;  /* 30 detik */
