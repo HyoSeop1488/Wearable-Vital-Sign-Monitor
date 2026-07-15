@@ -154,19 +154,24 @@ Data vital tidak berasal dari slider ADC, melainkan dari **dataset CSV Kaggle** 
 ## 📁 Struktur Folder Proyek
 
 ```
-project_csv/
+Project IOT/
 │
-├── Sketch.ino              # Program utama ESP32 (setup, loop, OLED, aktuator)
-├── Config.h                # Semua konstanta: WiFi, MQTT, PIN, threshold, OLED
-├── Config.cpp              # Definisi konstanta runtime (threshold, timing)
-├── MQTT_handler.h          # Header modul MQTT (public API)
-├── MQTT_handler.cpp        # WiFi + MQTT + callback command + NVS persistence
-├── flows.json              # Node-RED flow siap import (dashboard + kontrol)
-├── diagram.json            # Wiring diagram Wokwi (board, komponen, koneksi)
-├── libraries.txt           # Daftar library Arduino + versi
-├── wokwi.toml              # Konfigurasi package untuk Wokwi
-└── human_vital_signs_dataset_2024.csv
-                            # Dataset Kaggle (rename ke /vitals_2024.csv di SPIFFS)
+├── README.md               # Dokumentasi proyek
+│
+├── Wokwi/                  # Source code ESP32 + konfigurasi simulator
+│   ├── Sketch.ino              # Program utama (setup, loop, OLED, aktuator)
+│   ├── Config.h                # Semua konstanta: WiFi, MQTT, PIN, threshold
+│   ├── Config.cpp              # Definisi konstanta runtime
+│   ├── MQTT_handler.h          # Header modul MQTT (public API)
+│   ├── MQTT_handler.cpp        # WiFi + MQTT + callback command + NVS
+│   ├── diagram.json            # Wiring diagram Wokwi
+│   ├── libraries.txt           # Daftar library Arduino + versi
+│   ├── wokwi.toml              # Konfigurasi package Wokwi
+│   └── human_vital_signs_dataset_2024.csv
+│                               # Dataset Kaggle (rename ke /vitals_2024.csv)
+│
+└── Node-Red/               # Dashboard visualisasi
+    └── flows.json              # Node-RED flow siap import
 ```
 
 ---
@@ -401,8 +406,8 @@ WiFiManager            @ 2.0.14
 
 1. Buka [wokwi.com](https://wokwi.com) → klik **New Project** → pilih **ESP32**
 2. Hapus konten default
-3. Salin isi `diagram.json` ke tab **diagram.json** di Wokwi
-4. Salin seluruh file kode ke tab yang sesuai:
+3. Salin isi `Wokwi/diagram.json` ke tab **diagram.json** di Wokwi
+4. Salin seluruh file kode dari folder `Wokwi/` ke tab yang sesuai:
    - `Sketch.ino` → tab **Sketch.ino**
    - `Config.h` → tab **Config.h**
    - `Config.cpp` → tab **Config.cpp**
@@ -410,7 +415,7 @@ WiFiManager            @ 2.0.14
    - `MQTT_handler.cpp` → tab **MQTT_handler.cpp**
 5. Upload dataset CSV:
    - Buka tab terakhir → klik dropdown (panah) → pilih **Upload file(s)...**
-   - Upload `human_vital_signs_dataset_2024.csv`
+   - Upload `Wokwi/human_vital_signs_dataset_2024.csv`
    - File akan muncul sebagai tab baru
 6. Klik **▶ Start Simulation**
 7. Buka **Serial Monitor** untuk melihat output log
@@ -434,14 +439,14 @@ Buka Node-RED → **Menu ☰ → Manage Palette → Install:**
 
 1. Buka Node-RED di browser: `http://localhost:1880`
 2. Klik **Menu ☰ → Import**
-3. Salin seluruh isi file `flows.json`
+3. Salin seluruh isi file `Node-Red/flows.json`
 4. Paste ke dialog import → klik **Import**
 5. Klik **Deploy** (tombol merah kanan atas)
 6. Buka dashboard di: `http://localhost:1880/ui`
 
 ### Konfigurasi MQTT Broker
 
-Flow `flows.json` sudah dikonfigurasi untuk `test.mosquitto.org:1883`. Jika ingin mengganti broker:
+Flow `Node-Red/flows.json` sudah dikonfigurasi untuk `test.mosquitto.org:1883`. Jika ingin mengganti broker:
 1. Klik dua kali node **MQTT Broker** (`test.mosquitto.org`)
 2. Ubah **Server** dan **Port** sesuai broker Anda
 3. Klik **Update** → **Deploy**
