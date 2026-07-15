@@ -82,17 +82,17 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 │    human_vital_signs_dataset_2024.csv                           │
 │           │                                                     │
 │           ▼                                                     │
-│    SPIFFS → Read row → Parse CSV → Moving Average              │
+│    SPIFFS → Read row → Parse CSV → Moving Average               │
 │           │                              │                      │
 │           ▼                              ▼                      │
 │    OLED Display               determinePatientStatus()          │
-│    LED (R/Y/G)                       │                         │
-│    Buzzer Alarm                      ▼                         │
+│    LED (R/Y/G)                       │                          │
+│    Buzzer Alarm                      ▼                          │
 │                              Normal / Warning / Critical        │
 │                              │                                  │
 │                              ▼                                  │
 │    MQTT Publish: vitals / alarm / state / presence              │
-│    MQTT Subscribe: cmd (PING, REBOOT, GET_STATE,               │
+│    MQTT Subscribe: cmd (PING, REBOOT, GET_STATE,                │
 │                    GET_THRESHOLDS, SET_THRESHOLD_*, ACK_ALARM)  │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ WiFi
@@ -101,23 +101,23 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 ┌────────────────────────────────────────────────────────────────┐
 │                      BROKER LAYER                              │
 │                                                                │
-│              test.mosquitto.org : 1883 / 8883 (TLS)            │
+│             test.mosquitto.org : 1883 / 8883 (TLS)             │
 │                                                                │
 │          Topics: hospital/patient/001/{vitals,alarm,           │
-│                    state,presence,cmd}                          │
+│                    state,presence,cmd}                         │
 └──────────────────────────┬─────────────────────────────────────┘
                            │ MQTT Subscribe
                            ▼
 ┌────────────────────────────────────────────────────────────────┐
-│                    DASHBOARD LAYER                              │
+│                    DASHBOARD LAYER                             │
 │                                                                │
-│   Node-RED ──► Gauge SpO₂ / HR / Suhu                         │
+│   Node-RED ──► Gauge SpO₂ / HR / Suhu                          │
 │            ──► Line Chart Tren                                 │
 │            ──► Patient Status Banner (color-coded)             │
 │            ──► Alarm Log Table                                 │
 │            ──► Toast Notification                              │
-│            ──► Control Buttons (PING, GET STATE, REBOOT,      │
-│                 THRESHOLDS, ACK ALARM)                          │
+│            ──► Control Buttons (PING, GET STATE, REBOOT,       │
+│                 THRESHOLDS, ACK ALARM)                         │
 └────────────────────────────────────────────────────────────────┘
 ```
 
