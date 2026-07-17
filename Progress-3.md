@@ -127,7 +127,50 @@ readCsvRow() → applyMovingAverage() → determinePatientStatus()
 
 ---
 
-## Rencana Selanjutnya
+## Keputusan Arsitektur: QOS Strategy
+
+### Latar Belakang
+Proyek menggunakan **PubSubClient** yang hanya mendukung QoS 0 untuk publish/subscribe. Namun LWT (Last Will and Testament) dapat dikonfigurasi dengan QoS 1/2 karena di-set sebagai bagian dari MQTT CONNECT packet — diurus oleh broker, bukan library.
+
+### Implementasi Saat Ini
+
+| Operasi | QoS | Mekanisme |
+|---------|-----|-----------|
+| **Publish** (vitals, alarm) | **0** | Fire-and-forget via PubSubClient |
+| **Subscribe** (cmd) | **0** | Fire-and-forget via PubSubClient |
+| **Publish** (state, presence) | **0 + retained** | State terakhir disimpan broker untuk subscriber baru |
+| **LWT** (offline) | **1** | Di-set saat CONNECT; broker publish "offline" otomatis jika ESP disconnect mendadak |
+
+### Argumen untuk Mentor
+
+**Kenapa QoS 0 untuk data?**
+
+1. **Dataset CSV bersifat replayable.** Setiap baris data berasal dari file statis yang di-loop otomatis saat EOF. Jika 1-2 baris gagal terpublish, data yang sama akan terbaca lagi dalam siklus berikutnya. Tidak ada informasi unik yang hilang secara permanen.
+
+2. **SPIFFS fallback + replay sebagai lapisan proteksi.** Saat MQTT offline, data disimpan ke SPIFFS (`data_log.csv`) dengan rotation 500 baris. Setelah reconnect, seluruh data di-replay otomatis ke broker. Ini memberikan **at-least-once delivery** tanpa perlu QoS 1 — dengan cara yang lebih ringan untuk ESP32.
+
+3. **QoS 1 membawa duplikat.** Dengan interval publish 1 detik dan data idempotent, duplikat lebih berbahaya daripada loss — grafik dashboard jadi tidak mulus, alarm bisa ter-trigger 2× untuk event yang sama.
+
+4. **Efisiensi resource.** QoS 0 = tanpa overhead retry queue, tanpa packet ID tracking. Dengan RAM ESP32 terbatas (~272 KB free setelah program), setiap KB berharga untuk future enhancement (sensor nyata, TLS, dll).
+
+**Kenapa LWT pakai QoS 1?**
+
+1. **LWT adalah one-time config, bukan mekanisme publish.** QoS 1 untuk LWT tidak membutuhkan retry queue atau packet tracking di sisi ESP — semuanya diurus broker. Biaya overhead = 0 untuk ESP.
+
+2. **Status offline kritis untuk dashboard.** Jika ESP mati mendadak dan LWT gagal sampai (QoS 0), dashboard masih menampilkan "online" — pasien seolah masih terpantau padahal tidak. QoS 1 memastikan broker menerima instruksi LWT dan publish "offline" ke subscriber.
+
+3. **Tidak ada duplikat untuk LWT.** LWT hanya dikirim sekali (saat koneksi putus). QoS 1 tidak menghasilkan duplikat karena broker hanya mengirim satu LWT per sesi.
+
+### Rencana ke Depan
+
+| Skenario | QoS Plan | Alasan |
+|----------|----------|--------|
+| **Saat ini** (dataset CSV) | Q0S 0 + SPIFFS replay | Data replayable, loss aman |
+| **Migrasi sensor nyata** | QoS 1 untuk vitals & alarm via `esp-mqtt` | Data unik per detik, loss = kehilangan informasi klinis |
+| **Alarm** | QoS 1 | Transisi status Critical harus sampai, duplikat lebih baik daripada loss |
+| **LWT** | Tetap QoS 1 | Sama seperti sekarang, tidak perlu perubahan |
+
+---
 
 | Prioritas | Item |
 |-----------|------|
