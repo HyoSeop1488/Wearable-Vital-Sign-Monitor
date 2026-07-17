@@ -26,6 +26,9 @@ void mqttSetup();
 /** Dipanggil setiap iterasi loop(): menjaga koneksi dan memproses pesan. */
 void mqttLoop();
 
+/** Process MQTT incoming/outgoing tanpa reconnect (untuk dipanggil dari replay loop). */
+void mqttLoopOnce();
+
 /**
  * Publikasi data vital ke topic TOPIC_VITALS.
  * @param spo2          Nilai SpO2 dalam persen.

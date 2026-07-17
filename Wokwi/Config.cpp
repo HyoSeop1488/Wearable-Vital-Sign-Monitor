@@ -25,7 +25,7 @@ const uint16_t MQTT_PORT       = 1883;
 const uint16_t MQTT_TLS_PORT   = 8883;
 /* MQTT_USE_TLS ada di Config.h sebagai #define */
 /* MQTT_CLIENT_ID digenerate dinamis di MQTT_handler.cpp */
-const int      MQTT_KEEPALIVE  = 60;
+const int      MQTT_KEEPALIVE_SEC  = 60;
 
 /* ------------------------------------------------------------------ */
 /*  MQTT Topics                                                        */
@@ -35,6 +35,13 @@ const char* TOPIC_ALARM     = "hospital/patient/001/alarm";
 const char* TOPIC_STATE     = "hospital/patient/001/state";
 const char* TOPIC_PRESENCE  = "hospital/patient/001/presence";
 const char* TOPIC_CMD       = "hospital/patient/001/cmd";
+const char* TOPIC_FEEDBACK  = "hospital/patient/001/feedback";
+
+/* ------------------------------------------------------------------ */
+/*  OTA                                                                 */
+/* ------------------------------------------------------------------ */
+const char* OTA_HOSTNAME = "ESP32-VitalMon";
+const char* OTA_PASSWORD = "ganti123";
 
 /* ------------------------------------------------------------------ */
 /*  Threshold Alarm — SpO2 (%) — non-const agar bisa diubah via MQTT  */
@@ -55,6 +62,8 @@ int HR_CRITICAL_HIGH    = 120;
 /* ------------------------------------------------------------------ */
 float TEMP_WARNING_HIGH   = 37.5f;
 float TEMP_CRITICAL_HIGH  = 38.5f;
+float TEMP_WARNING_LOW    = 36.0f;
+float TEMP_CRITICAL_LOW   = 35.0f;
 
 /* ------------------------------------------------------------------ */
 /*  Patient Status string constants — M2                                 */

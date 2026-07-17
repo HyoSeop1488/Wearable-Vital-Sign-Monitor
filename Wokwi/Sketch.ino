@@ -27,8 +27,8 @@
  */
 
 #include <Wire.h>
-#include <FS.h>
 #include <SPIFFS.h>
+#include <cmath>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <esp_task_wdt.h>
@@ -40,19 +40,19 @@
 /*  Objek OLED                                                         */
 /* ------------------------------------------------------------------ */
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+static bool g_oledAvailable = false;
 
 /* ------------------------------------------------------------------ */
 /*  Handle file CSV                                                    */
 /* ------------------------------------------------------------------ */
-static File g_csvFile;
-static char g_csvTimestamp[25] = "";
+static File g_csvFile;  /* default-constructed (invalid/closed) */
 
 /* ------------------------------------------------------------------ */
 /*  Buffer moving average filter                                       */
 /* ------------------------------------------------------------------ */
-float g_spo2Buffer[FILTER_SIZE] = {98, 98, 98, 98, 98};
-int   g_hrBuffer[FILTER_SIZE]   = {75, 75, 75, 75, 75};
-float g_tempBuffer[FILTER_SIZE] = {36.5, 36.5, 36.5, 36.5, 36.5};
+float g_spo2Buffer[FILTER_SIZE] = {0};
+int   g_hrBuffer[FILTER_SIZE]   = {0};
+float g_tempBuffer[FILTER_SIZE] = {0};
 int   g_filterIndex             = 0;
 
 /* ------------------------------------------------------------------ */
@@ -68,7 +68,7 @@ char  g_lastStatus[16]    = "Normal";
 /*  Hysteresis counter untuk cegah flapping status                     */
 /* ------------------------------------------------------------------ */
 #define HYSTERESIS_COUNT 2
-static int g_hysteresisCount = 0;
+static uint16_t g_hysteresisCount = 0;
 
 /* ------------------------------------------------------------------ */
 /*  Timing                                                             */
@@ -77,7 +77,6 @@ unsigned long g_lastPublish           = 0;
 unsigned long g_lastCriticalBuzzer    = 0;
 unsigned long g_lastWarningBuzzer     = 0;
 unsigned long g_lastOledActivity      = 0;
-bool          g_buzzerState           = false;
 bool          g_oledSleeping          = false;
 
 /* ------------------------------------------------------------------ */
@@ -100,12 +99,26 @@ void updateOled();
 void printSerial();
 void logToSpiffs(float spo2, int hr, float temp, const char* status, const char* ts);
 void replayDataLog();
+const char* getTimestamp();
 
 /* ================================================================== */
 /*  SETUP                                                              */
 /* ================================================================== */
 void setup() {
   Serial.begin(115200);
+
+  /* Watchdog Timer: init sebelum splash screen untuk melindungi setup */
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = 15000,
+    .idle_core_mask = 0,
+    .trigger_panic = true,
+  };
+  esp_task_wdt_init(&wdt_config);
+#else
+  esp_task_wdt_init(15000, true);
+#endif
+  enableLoopWDT();
 
   /* Inisialisasi pin aktuator */
   pinMode(PIN_LED_RED,    OUTPUT);
@@ -120,37 +133,49 @@ void setup() {
   Wire.begin(OLED_SDA, OLED_SCL);
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
     Serial.println("[ERROR] OLED tidak ditemukan!");
+  } else {
+    g_oledAvailable = true;
   }
 
   /* Splash screen */
-  display.clearDisplay();
-  display.setTextColor(WHITE);
-  display.setTextSize(1);
-  display.setCursor(14, 10);
-  display.println("Vital Sign Monitor");
-  display.setCursor(20, 24);
-  display.println("IoT Dev Comp TETI");
-  display.setCursor(36, 38);
-  display.println("2026 - MVP");
-  display.drawRect(0, 0, 128, 64, WHITE);
-  display.display();
-  delay(2000);
+  if (g_oledAvailable) {
+    esp_task_wdt_reset();
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setCursor(14, 10);
+    display.println("Vital Sign Monitor");
+    display.setCursor(20, 24);
+    display.println("IoT Dev Comp TETI");
+    display.setCursor(36, 38);
+    display.println("2026 - MVP");
+    display.drawRect(0, 0, 128, 64, WHITE);
+    display.display();
+    delay(2000);
+  }
 
-  g_lastOledActivity = millis();  /* timer idle OLED mulai setelah splash */
+  g_lastOledActivity = millis();
 
   /* Inisialisasi SPIFFS */
+  esp_task_wdt_reset();
   if (!SPIFFS.begin(true)) {
     Serial.println("[ERROR] SPIFFS gagal di-mount!");
   }
 
   /* G3: Hitung baris existing data log agar rotation threshold akurat */
   if (SPIFFS.exists(DATA_LOG_PATH)) {
-    File _log = SPIFFS.open(DATA_LOG_PATH, FILE_READ);
-    if (_log) {
-      while (_log.available()) {
-        if (_log.read() == '\n') g_logLineCount++;
+    File logFile = SPIFFS.open(DATA_LOG_PATH, FILE_READ);
+    if (logFile) {
+      char buf[128];
+      while (logFile.available()) {
+        size_t n = logFile.readBytesUntil('\n', buf, sizeof(buf) - 1);
+        if (n > 0) g_logLineCount++;
+        /* Skip sisa baris jika buffer penuh */
+        while (n == sizeof(buf) - 1 && logFile.available()) {
+          n = logFile.readBytesUntil('\n', buf, sizeof(buf) - 1);
+        }
       }
-      _log.close();
+      logFile.close();
       Serial.printf("[LOG]   Existing log: %zu baris\n", g_logLineCount);
     }
   }
@@ -163,13 +188,24 @@ void setup() {
     Serial.println(" sudah diupload ke Wokwi.");
   }
 
+  /* Seed moving average buffer dari baris CSV pertama */
+  if (readCsvRow()) {
+    for (int i = 0; i < FILTER_SIZE; i++) {
+      g_hrBuffer[i]   = g_hrBuffer[0];
+      g_spo2Buffer[i] = g_spo2Buffer[0];
+      g_tempBuffer[i] = g_tempBuffer[0];
+    }
+    g_filterIndex = 0;
+    Serial.println("[FILTER] Buffer di-seed dari baris CSV pertama");
+  }
+
   /* Inisialisasi koneksi WiFi dan MQTT */
+  esp_task_wdt_reset();
   mqttSetup();
 
   /* OTA: update firmware over WiFi tanpa kabel USB */
-  /* L2: Ganti password untuk production — "ota123" hanya untuk demo */
-  ArduinoOTA.setHostname("ESP32-VitalMon");
-  ArduinoOTA.setPassword("ota123");
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
   ArduinoOTA.onStart([]() {
     const char* type = ArduinoOTA.getCommand() == U_FLASH ? "sketch" : "filesystem";
     Serial.printf("[OTA] Mulai update %s\n", type);
@@ -178,16 +214,14 @@ void setup() {
     Serial.println("[OTA] Selesai");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("[OTA] Progress: %u%%\r", progress / (total / 100));
+    Serial.printf("[OTA] Progress: %u%%\r", total > 0 ? progress * 100 / total : 0);
   });
   ArduinoOTA.onError([](ota_error_t error) {
     Serial.printf("[OTA] Error %d\n", error);
   });
   ArduinoOTA.begin();
 
-  /* Watchdog Timer: reset otomatis jika loop hang >15 detik */
-  esp_task_wdt_init(15, true);
-  esp_task_wdt_add(NULL);
+  /* Watchdog sudah diinit di awal setup() */
 
   Serial.println("[READY] Sistem aktif -- mode dataset CSV");
   Serial.print("[CSV]   File: ");
@@ -218,7 +252,6 @@ void loop() {
 
   if ((unsigned long)(millis() - g_lastPublish) >= PUBLISH_INTERVAL) {
     if (g_csvFile) {
-      /* Baca satu baris CSV dan proses */
       if (readCsvRow()) {
         applyMovingAverage();
         determinePatientStatus();
@@ -226,16 +259,18 @@ void loop() {
         /* updateOled() dipanggil di luar if agar tetap refresh walau
            readCsvRow gagal (OLED tidak tampilkan data basi) */
 
-        bool published = mqttPublishVitals(g_spo2Value, g_heartRate, g_tempValue, g_patientStatus, g_csvTimestamp);
+        const char* ts = getTimestamp();
+        bool published = mqttPublishVitals(g_spo2Value, g_heartRate, g_tempValue, g_patientStatus, ts);
 
         /* Jika MQTT offline, simpan data ke SPIFFS sebagai buffer */
         if (!published) {
-          logToSpiffs(g_spo2Value, g_heartRate, g_tempValue, g_patientStatus, g_csvTimestamp);
+          logToSpiffs(g_spo2Value, g_heartRate, g_tempValue, g_patientStatus, ts);
         }
 
         /* Transisi status: update state + publish event */
         if (strcmp(g_patientStatus, g_lastStatus) != 0) {
-          strncpy(g_lastStatus, g_patientStatus, sizeof(g_lastStatus));
+          strncpy(g_lastStatus, g_patientStatus, sizeof(g_lastStatus) - 1);
+          g_lastStatus[sizeof(g_lastStatus) - 1] = '\0';
 
           /* Reset alarm ack saat status berubah */
           mqttResetAlarmAck();
@@ -250,10 +285,13 @@ void loop() {
 
             /* Event alarm (not retained): hanya saat transisi ke non-Normal */
             if (strcmp(g_patientStatus, STATUS_NORMAL) != 0) {
-              mqttPublishAlarm(g_patientStatus, g_spo2Value, g_heartRate, g_tempValue, g_csvTimestamp);
+              mqttPublishAlarm(g_patientStatus, g_spo2Value, g_heartRate, g_tempValue, ts);
             }
           }
         }
+      } else {
+        /* M6: Reset hysteresis counter saat CSV read gagal */
+        g_hysteresisCount = 0;
       }
       updateOled();  /* selalu refresh OLED dalam publish cycle */
     } else {
@@ -263,7 +301,8 @@ void loop() {
     g_lastPublish = millis();
   }
 
-  delay(10);
+  /* Non-blocking yield — beri waktu untuk task RTOS lain */
+  delay(1);
 }
 
 /* ================================================================== */
@@ -284,6 +323,18 @@ bool openCsvFile() {
   return true;
 }
 
+const char* getTimestamp() {
+  /* LIMITASI: millis() wrap ~49.7 hari — timestamp reset ke SIM-00:00:00.
+     Untuk production >49 hari, gunakan RTC eksternal atau NTP. */
+  static char ts[25];
+  unsigned long now = millis();
+  unsigned long sec = now / 1000;
+  unsigned long min = sec / 60;
+  unsigned long hour = min / 60;
+  snprintf(ts, sizeof(ts), "SIM-%02lu:%02lu:%02lu", hour % 24, min % 60, sec % 60);
+  return ts;
+}
+
 /* ================================================================== */
 /*  readCsvRow                                                         */
 /*  Baca satu baris CSV dari SPIFFS dan parse empat kolom:            */
@@ -296,30 +347,46 @@ bool openCsvFile() {
 /*  dataset loop tak terbatas selama simulasi berjalan.               */
 /*                                                                    */
 /*  Parsing menggunakan char buffer (bukan String) untuk menghindari  */
-/*  fragmentasi heap. Nilai divalidasi range sebelum dipakai.         */
-/* ================================================================== */
 bool readCsvRow() {
+  static uint8_t g_csvHeaderFail = 0;
   if (!g_csvFile) return false;
 
   /* EOF -- loop ke awal dataset */
   if (!g_csvFile.available()) {
     Serial.println("[CSV]   EOF -- loop ke awal dataset");
+    g_hysteresisCount = 0;
     if (!g_csvFile.seek(0)) {
       Serial.println("[CSV]   Seek gagal, buka ulang file...");
       g_csvFile.close();
-      openCsvFile();
+      if (!openCsvFile()) {
+        Serial.println("[CSV]   Recovery open gagal!");
+      }
       return false;
     }
     {
       char _hdr[256];
-      g_csvFile.readBytesUntil('\n', _hdr, sizeof(_hdr) - 1); /* lewati header (L3) */
+      size_t _n = g_csvFile.readBytesUntil('\n', _hdr, sizeof(_hdr) - 1);
+      if (_n == 0) {
+        if (++g_csvHeaderFail > 3) {
+          Serial.println("[CSV]   FATAL: Header gagal 3x berturut-turut — stop CSV");
+          g_csvFile.close();
+          g_csvFile = File();
+          return false;
+        }
+        Serial.println("[CSV]   Header read gagal!");
+        return false;
+      }
+      g_csvHeaderFail = 0;
     }
   }
 
   /* Baca satu baris ke char buffer */
-  char line[128];
+  char line[256];
   size_t len = g_csvFile.readBytesUntil('\n', line, sizeof(line) - 1);
   line[len] = '\0';
+  if (len == sizeof(line) - 1) {
+    Serial.printf("[CSV]   WARN: Line truncated at %zu chars\n", len);
+  }
 
   /* Trim trailing whitespace */
   while (len > 0 && (line[len - 1] == ' ' || line[len - 1] == '\r')) {
@@ -328,37 +395,30 @@ bool readCsvRow() {
 
   if (len == 0) return false;
 
-  /* Parse CSV: heart_rate, spo2, temperature, timestamp */
+  /* Parse CSV: heart_rate, spo2, temperature */
   int   rawHr   = 0;
   float rawSpo2 = 0.0f;
   float rawTemp = 0.0f;
-  char  rawTs[25] = "";
 
-  int parsed = sscanf(line, "%d,%f,%f,%24[^\n]", &rawHr, &rawSpo2, &rawTemp, rawTs);
+  int parsed = sscanf(line, "%d,%f,%f", &rawHr, &rawSpo2, &rawTemp);
   if (parsed < 3) {
     Serial.printf("[CSV]   Parse error (fields=%d): %s\n", parsed, line);
     return false;
   }
 
   /* Validasi range nilai fisiologis
-     M3: Berbeda dengan SPO2_VALID_MIN/MAX di Config (80-100) yang untuk
-     threshold admin. Ini untuk plausibility dataset: reject data rusak. */
-  if (rawHr < 20 || rawHr > 250) return false;
+     Bounds ini sengaja lebih longgar dari threshold Config.h (HR_VALID_MIN/MAX,
+     SPO2_VALID_MIN/MAX, TEMP_VALID_MIN/MAX) karena untuk plausibility dataset:
+     reject data rusak, bukan untuk threshold alarm. */
+  if (rawHr < HR_VALID_MIN || rawHr > HR_VALID_MAX) return false;
   if (rawSpo2 < 50.0f || rawSpo2 > 100.0f) return false;
-  if (rawTemp < 34.0f || rawTemp > 42.0f) return false;
+  if (rawTemp < TEMP_VALID_MIN || rawTemp > TEMP_VALID_MAX) return false;
 
   /* Simpan ke buffer moving average */
   g_hrBuffer[g_filterIndex]   = rawHr;
   g_spo2Buffer[g_filterIndex] = rawSpo2;
   g_tempBuffer[g_filterIndex] = rawTemp;
   g_filterIndex = (g_filterIndex + 1) % FILTER_SIZE;
-
-  /* Simpan timestamp untuk dipakai di publish */
-  if (parsed >= 4 && strlen(rawTs) > 0) {
-    strncpy(g_csvTimestamp, rawTs, sizeof(g_csvTimestamp) - 1);
-    g_csvTimestamp[sizeof(g_csvTimestamp) - 1] = '\0';
-    Serial.printf("[CSV]   Timestamp: %s\n", g_csvTimestamp);
-  }
 
   return true;
 }
@@ -380,7 +440,7 @@ void applyMovingAverage() {
   }
 
   g_spo2Value = sumSpo2 / FILTER_SIZE;
-  g_heartRate = (sumHr + FILTER_SIZE / 2) / FILTER_SIZE;  /* rounding */
+  g_heartRate = (int)round((float)sumHr / FILTER_SIZE);
   g_tempValue = sumTemp / FILTER_SIZE;
 }
 
@@ -400,24 +460,28 @@ void determinePatientStatus() {
   bool isCritical = (g_spo2Value < SPO2_CRITICAL_LOW)  ||
                     (g_heartRate < HR_CRITICAL_LOW)     ||
                     (g_heartRate > HR_CRITICAL_HIGH)    ||
-                    (g_tempValue > TEMP_CRITICAL_HIGH);
+                    (g_tempValue > TEMP_CRITICAL_HIGH)  ||
+                    (g_tempValue < TEMP_CRITICAL_LOW);
 
   bool isWarning  = (g_spo2Value < SPO2_WARNING_LOW)   ||
                     (g_heartRate < HR_WARNING_LOW)      ||
                     (g_heartRate > HR_WARNING_HIGH)     ||
-                    (g_tempValue > TEMP_WARNING_HIGH);
+                    (g_tempValue > TEMP_WARNING_HIGH)   ||
+                    (g_tempValue < TEMP_WARNING_LOW);
 
   /* Tentukan level yang seharusnya */
   char desired[16];
-  if (isCritical)      strncpy(desired, STATUS_CRITICAL, sizeof(desired));
-  else if (isWarning)  strncpy(desired, STATUS_WARNING,  sizeof(desired));
-  else                 strncpy(desired, STATUS_NORMAL,   sizeof(desired));
+  if (isCritical)      strncpy(desired, STATUS_CRITICAL, sizeof(desired) - 1);
+  else if (isWarning)  strncpy(desired, STATUS_WARNING,  sizeof(desired) - 1);
+  else                 strncpy(desired, STATUS_NORMAL,   sizeof(desired) - 1);
+  desired[sizeof(desired) - 1] = '\0';
 
   /* Hysteresis: hanya berubah jika level baru bertahan beberapa siklus */
   if (strcmp(desired, g_patientStatus) != 0) {
     g_hysteresisCount++;
     if (g_hysteresisCount >= HYSTERESIS_COUNT) {
-      strncpy(g_patientStatus, desired, sizeof(g_patientStatus));
+      strncpy(g_patientStatus, desired, sizeof(g_patientStatus) - 1);
+      g_patientStatus[sizeof(g_patientStatus) - 1] = '\0';
       g_hysteresisCount = 0;
     }
   } else {
@@ -440,14 +504,11 @@ void handleActuators() {
 
     /* Critical: rapid beep 1200Hz setiap 600ms */
     if (!alarmAcked && (unsigned long)(millis() - g_lastCriticalBuzzer) >= BUZZER_CRITICAL_INTERVAL) {
-      g_buzzerState = !g_buzzerState;
-      if (g_buzzerState) tone(PIN_BUZZER, BUZZER_CRITICAL_FREQ, BUZZER_CRITICAL_DURATION);
-      else noTone(PIN_BUZZER);
+      tone(PIN_BUZZER, BUZZER_CRITICAL_FREQ, BUZZER_CRITICAL_DURATION);
       g_lastCriticalBuzzer = millis();
     }
     if (alarmAcked) {
       noTone(PIN_BUZZER);
-      g_buzzerState = false;
     }
 
   } else if (strcmp(g_patientStatus, STATUS_WARNING) == 0) {
@@ -457,14 +518,11 @@ void handleActuators() {
 
     /* Warning: slow beep 800Hz setiap 2000ms */
     if (!alarmAcked && (unsigned long)(millis() - g_lastWarningBuzzer) >= BUZZER_WARNING_INTERVAL) {
-      g_buzzerState = !g_buzzerState;
-      if (g_buzzerState) tone(PIN_BUZZER, BUZZER_WARNING_FREQ, BUZZER_WARNING_DURATION);
-      else noTone(PIN_BUZZER);
+      tone(PIN_BUZZER, BUZZER_WARNING_FREQ, BUZZER_WARNING_DURATION);
       g_lastWarningBuzzer = millis();
     }
     if (alarmAcked) {
       noTone(PIN_BUZZER);
-      g_buzzerState = false;
     }
 
   } else {
@@ -472,7 +530,6 @@ void handleActuators() {
     digitalWrite(PIN_LED_YELLOW, LOW);
     digitalWrite(PIN_LED_GREEN,  HIGH);
     noTone(PIN_BUZZER);
-    g_buzzerState = false;
   }
 }
 
@@ -483,6 +540,7 @@ void handleActuators() {
 /*  Jika file CSV tidak ditemukan, tampilkan pesan error.              */
 /* ================================================================== */
 void updateOled() {
+  if (!g_oledAvailable) return;
   unsigned long now = millis();
 
   /* Sleep mode: matikan OLED jika tidak ada perubahan status > timeout */
@@ -500,8 +558,9 @@ void updateOled() {
   /* Wake up display jika sedang sleep */
   if (g_oledSleeping) {
     display.ssd1306_command(SSD1306_DISPLAYON);
+    delay(1);  /* stabilisasi charge pump */
     g_oledSleeping = false;
-    delay(10);  /* beri waktu display stabil */
+    g_lastOledActivity = millis();
   }
 
   display.clearDisplay();
@@ -597,7 +656,10 @@ void logToSpiffs(float spo2, int hr, float temp, const char* status, const char*
   }
 
   File logFile = SPIFFS.open(DATA_LOG_PATH, FILE_APPEND);
-  if (!logFile) return;
+  if (!logFile) {
+    Serial.println("[LOG]   ERROR: Gagal buka file untuk append!");
+    return;
+  }
 
   char line[128];
   snprintf(line, sizeof(line), "%.1f,%d,%.1f,%s,%s\n", spo2, hr, temp, status, ts ? ts : "");
@@ -622,8 +684,14 @@ void replayDataLog() {
   size_t size = logFile.size();
   if (size == 0) {
     logFile.close();
-    SPIFFS.remove(DATA_LOG_PATH);
-    g_logLineCount = 0;
+    if (SPIFFS.remove(DATA_LOG_PATH)) {
+      g_logLineCount = 0;
+    } else {
+      /* Jika remove gagal, overwrite file dengan konten kosong */
+      File emptyFile = SPIFFS.open(DATA_LOG_PATH, FILE_WRITE);
+      if (emptyFile) emptyFile.close();
+      g_logLineCount = 0;
+    }
     return;
   }
 
@@ -631,11 +699,15 @@ void replayDataLog() {
 
   char line[128];
   int replayed = 0;
-  char lastReplayStatus[16];
-  strncpy(lastReplayStatus, g_patientStatus, sizeof(lastReplayStatus) - 1);
-  lastReplayStatus[sizeof(lastReplayStatus) - 1] = '\0';
+  static char lastReplayStatus[16] = "";
+  if (lastReplayStatus[0] == '\0') {
+    strncpy(lastReplayStatus, g_patientStatus, sizeof(lastReplayStatus) - 1);
+    lastReplayStatus[sizeof(lastReplayStatus) - 1] = '\0';
+  }
   while (logFile.available()) {
     esp_task_wdt_reset();
+    mqttLoopOnce();
+    ArduinoOTA.handle();
     size_t len = logFile.readBytesUntil('\n', line, sizeof(line) - 1);
     line[len] = '\0';
     if (len == 0) continue;
@@ -648,28 +720,28 @@ void replayDataLog() {
     if (!mqttIsConnected()) {
       Serial.printf("[LOG]   MQTT disconnect — replay dibatalkan (%d replayed)\n", replayed);
       logFile.close();
-      return;  /* jangan hapus file, data tetap aman untuk replay nanti */
+      return;
     }
 
     if (parsed >= 4) {
       mqttPublishVitals(spo2, hr, temp, status, parsed >= 5 ? ts : "");
-      /* B-NEW2: Re-publish alarm event hanya pada transisi status */
       if (strcmp(status, lastReplayStatus) != 0 && strcmp(status, STATUS_NORMAL) != 0) {
         mqttPublishAlarm(status, spo2, hr, temp, parsed >= 5 ? ts : "");
       }
       strncpy(lastReplayStatus, status, sizeof(lastReplayStatus) - 1);
       lastReplayStatus[sizeof(lastReplayStatus) - 1] = '\0';
       replayed++;
-      delay(50);  /* throttle agar tidak flood broker */
+      delay(50);
     } else {
       Serial.printf("[LOG]   Parse error (fields=%d): %s\n", parsed, line);
     }
   }
   logFile.close();
 
-  /* Hapus file log setelah sukses replay */
-  SPIFFS.remove(DATA_LOG_PATH);
-  g_logLineCount = 0;
+  if (SPIFFS.remove(DATA_LOG_PATH)) {
+    g_logLineCount = 0;
+    lastReplayStatus[0] = '\0';
+  }
 
   Serial.printf("[LOG]   Replay selesai: %d data terpublish\n", replayed);
 }

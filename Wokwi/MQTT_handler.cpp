@@ -17,10 +17,16 @@
 #if MQTT_USE_TLS
 #include <WiFiClientSecure.h>
 #endif
-#include <ctype.h>
+#include <esp_task_wdt.h>
+#include <cctype>
 #include <ArduinoJson.h>
+#include <cmath>
 #include <WiFiManager.h>
 #include <Preferences.h>
+#include <ArduinoOTA.h>
+
+/* External — shared state dari Sketch.ino */
+extern unsigned long g_lastOledActivity;
 
 /* ------------------------------------------------------------------ */
 /*  Objek internal (file-scope)                                        */
@@ -32,14 +38,15 @@ static WiFiClient       wifiClient;
 #endif
 static PubSubClient     mqttClient(wifiClient);
 static WiFiManager      g_wifiManager;
-static const char*      g_patientState = "Normal";  /* H1: pakai literal, hindari static init order */
+static char             g_patientState[16] = "Normal";
 static char             g_clientId[32];       /* digenerate dari MAC */
 static bool             g_clientIdGenerated = false;
 static bool             g_alarmAcknowledged = false;  /* ACK dari dashboard */
-static unsigned long    g_lastNvsSave = (-5000UL);     /* M1: unsigned wrap → (now - init) >= 5000 sejak boot */
+static unsigned long    g_lastNvsSave = 0;
+static bool             g_rebootPending = false;
 
 /* Command response queue — hindari publish() langsung dari callback (re-entrancy) */
-#define CMD_RESP_BUF_SIZE 256
+#define CMD_RESP_BUF_SIZE 384
 static char             g_cmdRespBuf[CMD_RESP_BUF_SIZE] = "";
 static const char*      g_cmdRespTopic = NULL;
 static bool             g_cmdRespPending = false;
@@ -67,12 +74,13 @@ static void connectWifi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
   g_wifiManager.setConnectTimeout(10);
-  g_wifiManager.setConfigPortalTimeout(10); /* < WDT 15s agar tidak reset */
+  g_wifiManager.setConfigPortalTimeout(7);
   g_wifiManager.setDarkMode(true);
 
   Serial.print("[WiFi] WiFiManager autoConnect...");
 
   /* Percobaan 1: WiFiManager — saved credentials atau AP portal */
+  esp_task_wdt_reset();
   if (g_wifiManager.autoConnect(WIFI_AP_NAME, WIFI_AP_PASS)) {
     Serial.println();
     Serial.print("[WiFi] Terhubung. IP: ");
@@ -86,6 +94,7 @@ static void connectWifi() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    esp_task_wdt_reset();
     delay(500);
     Serial.print(".");
     attempts++;
@@ -121,8 +130,7 @@ static void connectMqtt() {
   if (ok) {
     Serial.println(" OK");
 
-    /* Presence (terpisah dari state): overwrite LWT dengan "online" */
-    mqttClient.publish(TOPIC_PRESENCE, "online", true);
+    mqttClient.publish(TOPIC_PRESENCE, (const uint8_t*)"online", strlen("online"), true);
 
     /* Re-subscribe setelah reconnect (sesi broker hilang) */
     mqttClient.subscribe(TOPIC_CMD);
@@ -155,14 +163,20 @@ static const char* stristr(const char* haystack, const char* needle) {
 static float parseFloatAfter(const char* payload, const char* prefix) {
   const char* p = stristr(payload, prefix);
   if (!p) return -999;
-  return atof(p + strlen(prefix));
+  char* end = nullptr;
+  float val = strtof(p + strlen(prefix), &end);
+  if (end == p + strlen(prefix)) return -999;
+  return val;
 }
 
 /* Helper: parse integer value setelah prefix dalam payload (case-insensitive) */
 static int parseIntAfter(const char* payload, const char* prefix) {
   const char* p = stristr(payload, prefix);
   if (!p) return -999;
-  return atoi(p + strlen(prefix));
+  char* end = nullptr;
+  long val = strtol(p + strlen(prefix), &end, 10);
+  if (end == p + strlen(prefix)) return -999;
+  return (int)val;
 }
 
 /* Helper: threshold validator untuk SET_THRESHOLD reply */
@@ -183,19 +197,32 @@ static bool validateAndLogInt(int val, int min, int max, const char* name) {
 }
 
 /* Batas panjang command buffer (M2) */
-#define CMD_BUF_SIZE 64
+#define CMD_BUF_SIZE 512
 
 /* Forward declaration untuk fungsi NVS (didefinisikan setelah callback) */
 static void thresholdsSaveToNvs();
 
-/* Macro untuk SET_THRESHOLD — hilangkan duplikasi 8 blok serupa (D1) */
-/* CATATAN: Parameter `buf` adalah char array uppercase hasil parsing MQTT  */
+/* Macro untuk SET_THRESHOLD — hilangkan duplikasi 8 blok serupa */
 #define HANDLE_SET_THRESHOLD_FLOAT(buf, prefix, threshold, vmin, vmax) do {     \
   float _v = parseFloatAfter((buf), (prefix));                                  \
   if (validateAndLogFloat(_v, (vmin), (vmax), #threshold)) {                    \
     if ((threshold) != _v) { (threshold) = _v; thresholdsSaveDebounced(); }     \
     Serial.printf("[MQTT]   → " #threshold " = %.1f\n", _v);                    \
-  }                                                                             \
+    g_cmdRespTopic = TOPIC_FEEDBACK;                                              \
+    if (g_cmdRespPending) {                                                       \
+      Serial.println("[MQTT] WARN: Response queue overwrite");                    \
+    }                                                                             \
+    snprintf(g_cmdRespBuf, sizeof(g_cmdRespBuf),                                     \
+             "{\"cmd\":\"SET_THRESHOLD\",\"key\":\"" #threshold "\",\"value\":%.1f}", (double)_v); \
+    g_cmdRespRetained = false;                                                       \
+    g_cmdRespPending = true;                                                          \
+  } else {                                                                           \
+    g_cmdRespTopic = TOPIC_FEEDBACK;                                                 \
+    snprintf(g_cmdRespBuf, sizeof(g_cmdRespBuf),                                      \
+             "{\"cmd\":\"SET_THRESHOLD\",\"key\":\"" #threshold "\",\"error\":\"value out of range\"}"); \
+    g_cmdRespRetained = false;                                                        \
+    g_cmdRespPending = true;                                                           \
+  }                                                                                    \
 } while(0)
 
 #define HANDLE_SET_THRESHOLD_INT(buf, prefix, threshold, vmin, vmax) do {       \
@@ -203,13 +230,27 @@ static void thresholdsSaveToNvs();
   if (validateAndLogInt(_v, (vmin), (vmax), #threshold)) {                      \
     if ((threshold) != _v) { (threshold) = _v; thresholdsSaveDebounced(); }     \
     Serial.printf("[MQTT]   → " #threshold " = %d\n", _v);                      \
-  }                                                                             \
+    g_cmdRespTopic = TOPIC_FEEDBACK;                                              \
+    if (g_cmdRespPending) {                                                       \
+      Serial.println("[MQTT] WARN: Response queue overwrite");                    \
+    }                                                                             \
+    snprintf(g_cmdRespBuf, sizeof(g_cmdRespBuf),                                   \
+             "{\"cmd\":\"SET_THRESHOLD\",\"key\":\"" #threshold "\",\"value\":%d}", _v); \
+    g_cmdRespRetained = false;                                                     \
+    g_cmdRespPending = true;                                                        \
+  } else {                                                                           \
+    g_cmdRespTopic = TOPIC_FEEDBACK;                                                 \
+    snprintf(g_cmdRespBuf, sizeof(g_cmdRespBuf),                                      \
+             "{\"cmd\":\"SET_THRESHOLD\",\"key\":\"" #threshold "\",\"error\":\"value out of range\"}"); \
+    g_cmdRespRetained = false;                                                        \
+    g_cmdRespPending = true;                                                           \
+  }                                                                                    \
 } while(0)
 
 /* Threshold save with debounce — cegah flash wear dari rapid command */
 static void thresholdsSaveDebounced() {
   unsigned long now = millis();
-  if ((unsigned long)(now - g_lastNvsSave) >= 5000) {
+  if (g_lastNvsSave == 0 || (unsigned long)(now - g_lastNvsSave) >= 5000) {
     thresholdsSaveToNvs();
     g_lastNvsSave = now;
   } else {
@@ -218,6 +259,9 @@ static void thresholdsSaveDebounced() {
 }
 
 static void mqttCallback(char* topic, byte* payload, unsigned int len) {
+  /* M4: Reset OLED idle timer — aktivitas MQTT = user interaction */
+  g_lastOledActivity = millis();
+
   /* L1/L4: Copy ke local buffer agar tidak memodifikasi internal PubSubClient */
   char local[CMD_BUF_SIZE];
   size_t copyLen = (len < sizeof(local) - 1) ? len : (sizeof(local) - 1);
@@ -239,6 +283,10 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
     i++;
   }
   upper[i] = '\0';
+  /* Trim trailing whitespace (spasi, tab, CR, LF) */
+  while (i > 0 && (upper[i-1] == ' ' || upper[i-1] == '\t' || upper[i-1] == '\r' || upper[i-1] == '\n')) {
+    upper[--i] = '\0';
+  }
 
   if (strcmp(upper, "PING") == 0) {
     /* Queue response — jangan publish langsung dari callback */
@@ -246,13 +294,13 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
     strncpy(g_cmdRespBuf, "online", sizeof(g_cmdRespBuf) - 1);
     g_cmdRespBuf[sizeof(g_cmdRespBuf) - 1] = '\0';
     g_cmdRespRetained = true;
+    if (g_cmdRespPending) Serial.println("[MQTT] WARN: Response queue overwrite");
     g_cmdRespPending = true;
     Serial.println("[MQTT]   → PING replied");
 
   } else if (strcmp(upper, "REBOOT") == 0) {
-    Serial.println("[MQTT]   → REBOOT dalam 1 detik...");
-    delay(1000);
-    ESP.restart();
+    Serial.println("[MQTT]   → REBOOT antri...");
+    g_rebootPending = true;
 
   } else if (strcmp(upper, "GET_STATE") == 0) {
     /* Queue state — publish dari loop */
@@ -260,13 +308,12 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
     strncpy(g_cmdRespBuf, g_patientState, sizeof(g_cmdRespBuf) - 1);
     g_cmdRespBuf[sizeof(g_cmdRespBuf) - 1] = '\0';
     g_cmdRespRetained = true;
+    if (g_cmdRespPending) Serial.println("[MQTT] WARN: Response queue overwrite");
     g_cmdRespPending = true;
     Serial.printf("[MQTT]   → State queued: %s\n", g_patientState);
 
   } else if (strcmp(upper, "GET_THRESHOLDS") == 0) {
-    /* B1: Gunakan TOPIC_CMD sebagai reply, bukan TOPIC_STATE */
-    /* I1: StaticJsonDocument sebagai ganti DynamicJsonDocument        */
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
     doc["cmd"]            = "THRESHOLDS";
     doc["spo2_warn"]      = SPO2_WARNING_LOW;
     doc["spo2_crit"]      = SPO2_CRITICAL_LOW;
@@ -274,20 +321,30 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
     doc["hr_warn_high"]   = HR_WARNING_HIGH;
     doc["hr_crit_low"]    = HR_CRITICAL_LOW;
     doc["hr_crit_high"]   = HR_CRITICAL_HIGH;
-    doc["temp_warn"]      = TEMP_WARNING_HIGH;
-    doc["temp_crit"]      = TEMP_CRITICAL_HIGH;
+    doc["temp_warn_high"] = TEMP_WARNING_HIGH;
+    doc["temp_crit_high"] = TEMP_CRITICAL_HIGH;
+    doc["temp_warn_low"]  = TEMP_WARNING_LOW;
+    doc["temp_crit_low"]  = TEMP_CRITICAL_LOW;
     char buf[256];
-    serializeJson(doc, buf, sizeof(buf));   /* N1 */
-    g_cmdRespTopic = TOPIC_CMD;
+    size_t jsonLen = serializeJson(doc, buf, sizeof(buf));
+    if (jsonLen >= sizeof(buf)) {
+      Serial.println("[MQTT] ERROR: Thresholds JSON overflow!");
+      return;
+    }
+    g_cmdRespTopic = TOPIC_FEEDBACK;
     strncpy(g_cmdRespBuf, buf, sizeof(g_cmdRespBuf) - 1);
     g_cmdRespBuf[sizeof(g_cmdRespBuf) - 1] = '\0';
     g_cmdRespRetained = false;
+    if (g_cmdRespPending) Serial.println("[MQTT] WARN: Response queue overwrite");
     g_cmdRespPending = true;
     Serial.printf("[MQTT]   → Thresholds queued: %s\n", buf);
 
   } else if (strcmp(upper, "ACK_ALARM") == 0) {
-    /* B2: Tidak publish ke TOPIC_PRESENCE — hanya silent buzzer lokal */
     g_alarmAcknowledged = true;
+    g_cmdRespTopic = TOPIC_FEEDBACK;
+    snprintf(g_cmdRespBuf, sizeof(g_cmdRespBuf), "{\"cmd\":\"ACK_ALARM\",\"status\":\"ok\"}");
+    g_cmdRespRetained = false;
+    g_cmdRespPending = true;
     Serial.println("[MQTT]   → Alarm acknowledged (buzzer silent)");
 
   } else if (strncmp(upper, "SET_THRESHOLD_SPO2_WARN:", 24) == 0) {
@@ -306,8 +363,12 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
     HANDLE_SET_THRESHOLD_FLOAT(upper, "SET_THRESHOLD_TEMP_WARN:", TEMP_WARNING_HIGH, TEMP_VALID_MIN, TEMP_VALID_MAX);
   } else if (strncmp(upper, "SET_THRESHOLD_TEMP_CRIT:", 24) == 0) {
     HANDLE_SET_THRESHOLD_FLOAT(upper, "SET_THRESHOLD_TEMP_CRIT:", TEMP_CRITICAL_HIGH, TEMP_VALID_MIN, TEMP_VALID_MAX);
+  } else if (strncmp(upper, "SET_THRESHOLD_TEMP_WARN_LOW:", 28) == 0) {
+    HANDLE_SET_THRESHOLD_FLOAT(upper, "SET_THRESHOLD_TEMP_WARN_LOW:", TEMP_WARNING_LOW, TEMP_VALID_MIN, TEMP_VALID_MAX);
+  } else if (strncmp(upper, "SET_THRESHOLD_TEMP_CRIT_LOW:", 28) == 0) {
+    HANDLE_SET_THRESHOLD_FLOAT(upper, "SET_THRESHOLD_TEMP_CRIT_LOW:", TEMP_CRITICAL_LOW, TEMP_VALID_MIN, TEMP_VALID_MAX);
   } else {
-    Serial.printf("[MQTT]   → Perintah tidak dikenal: %s\n", p);
+    Serial.printf("[MQTT]   → Perintah tidak dikenal: %s\n", upper);
   }
 }
 
@@ -316,12 +377,15 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len) {
 /* ------------------------------------------------------------------ */
 #define NVS_SAVE_FLOAT(p, k, v)  do { (p).putFloat((k), (v)); } while(0)
 #define NVS_SAVE_INT(p, k, v)    do { (p).putInt((k), (v));   } while(0)
-#define NVS_LOAD_FLOAT(p, k, v)  do { float _v = (p).getFloat((k), -1); if (_v != -1.0f) (v) = _v; } while(0)
-#define NVS_LOAD_INT(p, k, v)    do { int _v   = (p).getInt((k), -1);   if (_v != -1) (v) = _v; } while(0)
+#define NVS_LOAD_FLOAT(p, k, v)  do { if ((p).isKey((k))) (v) = (p).getFloat((k), 0); } while(0)
+#define NVS_LOAD_INT(p, k, v)    do { if ((p).isKey((k))) (v) = (p).getInt((k), 0);   } while(0)
 
 static void thresholdsSaveToNvs() {
   Preferences prefs;
-  prefs.begin("thresholds", false);
+  if (!prefs.begin("thresholds", false)) {
+    Serial.println("[NVS] ERROR: Gagal buka NVS untuk write");
+    return;
+  }
   NVS_SAVE_FLOAT(prefs, "spo2_warn",  SPO2_WARNING_LOW);
   NVS_SAVE_FLOAT(prefs, "spo2_crit",  SPO2_CRITICAL_LOW);
   NVS_SAVE_INT(prefs, "hr_warn_low",  HR_WARNING_LOW);
@@ -330,13 +394,18 @@ static void thresholdsSaveToNvs() {
   NVS_SAVE_INT(prefs, "hr_crit_high", HR_CRITICAL_HIGH);
   NVS_SAVE_FLOAT(prefs, "temp_warn",  TEMP_WARNING_HIGH);
   NVS_SAVE_FLOAT(prefs, "temp_crit",  TEMP_CRITICAL_HIGH);
+  NVS_SAVE_FLOAT(prefs, "temp_warn_low",  TEMP_WARNING_LOW);
+  NVS_SAVE_FLOAT(prefs, "temp_crit_low",  TEMP_CRITICAL_LOW);
   prefs.end();
   Serial.println("[NVS] Thresholds saved");
 }
 
 static void thresholdsLoadFromNvs() {
   Preferences prefs;
-  prefs.begin("thresholds", true);
+  if (!prefs.begin("thresholds", true)) {
+    Serial.println("[NVS] ERROR: Gagal buka NVS untuk read");
+    return;
+  }
   NVS_LOAD_FLOAT(prefs, "spo2_warn",  SPO2_WARNING_LOW);
   NVS_LOAD_FLOAT(prefs, "spo2_crit",  SPO2_CRITICAL_LOW);
   NVS_LOAD_INT(prefs, "hr_warn_low",  HR_WARNING_LOW);
@@ -345,6 +414,8 @@ static void thresholdsLoadFromNvs() {
   NVS_LOAD_INT(prefs, "hr_crit_high", HR_CRITICAL_HIGH);
   NVS_LOAD_FLOAT(prefs, "temp_warn",  TEMP_WARNING_HIGH);
   NVS_LOAD_FLOAT(prefs, "temp_crit",  TEMP_CRITICAL_HIGH);
+  NVS_LOAD_FLOAT(prefs, "temp_warn_low",  TEMP_WARNING_LOW);
+  NVS_LOAD_FLOAT(prefs, "temp_crit_low",  TEMP_CRITICAL_LOW);
   prefs.end();
   Serial.println("[NVS] Thresholds loaded");
 }
@@ -357,21 +428,33 @@ void mqttSetup() {
   thresholdsLoadFromNvs();
   connectWifi();
   mqttClient.setServer(MQTT_BROKER, MQTT_USE_TLS ? MQTT_TLS_PORT : MQTT_PORT);
-  mqttClient.setKeepAlive(MQTT_KEEPALIVE);
+  mqttClient.setKeepAlive(MQTT_KEEPALIVE_SEC);
   mqttClient.setCallback(mqttCallback);
   connectMqtt();     /* sudah publish initial state */
 }
 
 void mqttLoop() {
+  if (g_rebootPending) {
+    mqttClient.publish(TOPIC_PRESENCE, (const uint8_t*)"offline", strlen("offline"), true);
+    mqttClient.disconnect();
+    delay(100);
+    esp_task_wdt_reset();
+    WiFi.disconnect();
+    ESP.restart();
+  }
   if (WiFi.status() != WL_CONNECTED) connectWifi();
   if (!mqttClient.connected())        connectMqtt();
   mqttClient.loop();
 
   /* Kirim response yang di-queue dari callback (re-entrancy safety) */
-  if (g_cmdRespPending && mqttClient.connected()) {
+  if (g_cmdRespPending && mqttClient.connected() && g_cmdRespTopic != NULL) {
     mqttClient.publish(g_cmdRespTopic, g_cmdRespBuf, g_cmdRespRetained);
     g_cmdRespPending = false;
   }
+}
+
+void mqttLoopOnce() {
+  if (mqttClient.connected()) mqttClient.loop();
 }
 
 bool mqttIsConnected() {
@@ -380,12 +463,15 @@ bool mqttIsConnected() {
 
 void mqttPublishState(const char* state) {
   if (!mqttClient.connected()) return;
-  mqttClient.publish(TOPIC_STATE, state, true);
+  if (!mqttClient.publish(TOPIC_STATE, (const uint8_t*)state, strlen(state), true)) {
+    Serial.println("[MQTT] WARN: State publish failed");
+  }
   Serial.printf("[MQTT] State: %s\n", state);
 }
 
 void mqttSetState(const char* state) {
-  g_patientState = state;
+  strncpy(g_patientState, state, sizeof(g_patientState) - 1);
+  g_patientState[sizeof(g_patientState) - 1] = '\0';
 }
 
 const char* mqttGetState() {
@@ -418,7 +504,10 @@ bool mqttPublishVitals(float spo2, int heartRate, float temperature, const char*
   doc["patient_status"] = patientStatus;
 
   char buf[256];
-  serializeJson(doc, buf, sizeof(buf));
+  if (serializeJson(doc, buf, sizeof(buf)) >= sizeof(buf)) {
+    Serial.println("[MQTT] ERROR: Vitals JSON overflow!");
+    return false;
+  }
   return publishJsonTo(TOPIC_VITALS, buf, "Vitals");
 }
 
@@ -431,6 +520,9 @@ bool mqttPublishAlarm(const char* patientStatus, float spo2, int heartRate, floa
   doc["timestamp"]     = csvTimestamp ? csvTimestamp : "";
 
   char buf[200];
-  serializeJson(doc, buf, sizeof(buf));
+  if (serializeJson(doc, buf, sizeof(buf)) >= sizeof(buf)) {
+    Serial.println("[MQTT] ERROR: Alarm JSON overflow!");
+    return false;
+  }
   return publishJsonTo(TOPIC_ALARM, buf, "Alarm");
 }

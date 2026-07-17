@@ -33,7 +33,7 @@ extern const uint16_t MQTT_TLS_PORT;
    preprocessor C tidak mengenali true/false sebagai konstanta #if.
    1 = aktifkan TLS port 8883 (butuh WiFiClientSecure + cert).        */
 #define MQTT_USE_TLS 0
-extern const int      MQTT_KEEPALIVE;
+extern const int      MQTT_KEEPALIVE_SEC;
 /* MQTT_CLIENT_ID sekarang digenerate dinamis dari MAC di MQTT_handler.cpp */
 
 /* ------------------------------------------------------------------ */
@@ -44,6 +44,13 @@ extern const char* TOPIC_ALARM;      /* event alarm saat transisi       */
 extern const char* TOPIC_STATE;      /* state pasien retained           */
 extern const char* TOPIC_PRESENCE;   /* LWT online/offline              */
 extern const char* TOPIC_CMD;        /* perintah masuk (subscribe)      */
+extern const char* TOPIC_FEEDBACK;   /* response command ke dashboard   */
+
+/* ------------------------------------------------------------------ */
+/*  OTA                                                                 */
+/* ------------------------------------------------------------------ */
+extern const char* OTA_HOSTNAME;
+extern const char* OTA_PASSWORD;
 
 /* ------------------------------------------------------------------ */
 /*  Pin Definitions — Aktuator (#define tetap karena compile-time)     */
@@ -102,6 +109,8 @@ extern int HR_CRITICAL_HIGH;
 /* ------------------------------------------------------------------ */
 extern float TEMP_WARNING_HIGH;
 extern float TEMP_CRITICAL_HIGH;
+extern float TEMP_WARNING_LOW;
+extern float TEMP_CRITICAL_LOW;
 /* Validation ranges */
 #define TEMP_VALID_MIN      34.0f
 #define TEMP_VALID_MAX      42.0f

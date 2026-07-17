@@ -67,6 +67,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 | 🔔 **ACK Alarm** | Silent buzzer dari dashboard tanpa mengubah status |
 | 🔐 **Unique Client ID** | Client ID digenerate dari MAC address untuk menghindari konflik broker |
 | 📝 **NVS Persistence** | Threshold tersimpan di NVS, tetap bertahan setelah reboot |
+| 🥶 **Hypothermia Detection** | Deteksi suhu tubuh rendah dengan threshold Warning/Critical sendiri |
 | 🔄 **OTA Update** | Update firmware over-the-air tanpa kabel USB |
 | ⏱️ **Watchdog Timer** | Reset otomatis jika loop hang >15 detik |
 | 💤 **OLED Sleep** | Matikan OLED setelah 30 detik idle untuk menghemat daya |
@@ -335,8 +336,10 @@ Perintah dikirim ke `hospital/patient/001/cmd`. Case-insensitive.
 | `SET_THRESHOLD_HR_WARN_HIGH:<val>` | `SET_THRESHOLD_HR_WARN_HIGH:110` | Ubah HR warning high (20-250) |
 | `SET_THRESHOLD_HR_CRIT_LOW:<val>` | `SET_THRESHOLD_HR_CRIT_LOW:45` | Ubah HR critical low (20-250) |
 | `SET_THRESHOLD_HR_CRIT_HIGH:<val>` | `SET_THRESHOLD_HR_CRIT_HIGH:130` | Ubah HR critical high (20-250) |
-| `SET_THRESHOLD_TEMP_WARN:<val>` | `SET_THRESHOLD_TEMP_WARN:38.0` | Ubah temp warning (34-42) |
-| `SET_THRESHOLD_TEMP_CRIT:<val>` | `SET_THRESHOLD_TEMP_CRIT:39.0` | Ubah temp critical (34-42) |
+| `SET_THRESHOLD_TEMP_WARN:<val>` | `SET_THRESHOLD_TEMP_WARN:38.0` | Ubah temp warning high (34-42) |
+| `SET_THRESHOLD_TEMP_CRIT:<val>` | `SET_THRESHOLD_TEMP_CRIT:39.0` | Ubah temp critical high (34-42) |
+| `SET_THRESHOLD_TEMP_WARN_LOW:<val>` | `SET_THRESHOLD_TEMP_WARN_LOW:36.0` | Ubah temp warning low / hipotermia (34-42) |
+| `SET_THRESHOLD_TEMP_CRIT_LOW:<val>` | `SET_THRESHOLD_TEMP_CRIT_LOW:35.0` | Ubah temp critical low / hipotermia (34-42) |
 | `ACK_ALARM` | `ACK_ALARM` | Silent buzzer sampai status berubah |
 | `REBOOT` | `REBOOT` | Restart ESP32 dalam 1 detik |
 
@@ -351,7 +354,9 @@ Perintah dikirim ke `hospital/patient/001/cmd`. Case-insensitive.
   "hr_crit_low": 50,
   "hr_crit_high": 120,
   "temp_warn": 37.5,
-  "temp_crit": 38.5
+  "temp_crit": 38.5,
+  "temp_warn_low": 36.0,
+  "temp_crit_low": 35.0
 }
 ```
 
@@ -381,9 +386,11 @@ Sistem menggunakan **dua level threshold** per parameter. Evaluasi dilakukan dar
 
 | Status | Kondisi | LED | Buzzer |
 |---|---|---|---|
-| 🟢 Normal | Suhu ≤ 37.5°C | Hijau ON | OFF |
-| 🟡 Warning | 37.5°C < Suhu ≤ 38.5°C | Kuning ON | Beep 800Hz tiap 2 detik |
-| 🔴 Critical | Suhu > 38.5°C | Merah ON | Beep 1200Hz tiap 600ms |
+| 🟢 Normal | 36.0°C < Suhu ≤ 37.5°C | Hijau ON | OFF |
+| 🟡 Warning (Demam) | 37.5°C < Suhu ≤ 38.5°C | Kuning ON | Beep 800Hz tiap 2 detik |
+| 🟡 Warning (Hipotermia) | 35.0°C ≤ Suhu < 36.0°C | Kuning ON | Beep 800Hz tiap 2 detik |
+| 🔴 Critical (Demam) | Suhu > 38.5°C | Merah ON | Beep 1200Hz tiap 600ms |
+| 🔴 Critical (Hipotermia) | Suhu < 35.0°C | Merah ON | Beep 1200Hz tiap 600ms |
 
 > **Catatan:** Buzzer Warning dapat di-silent via `ACK_ALARM`. Buzzer Critical juga silent setelah ACK. Saat status berubah, ACK di-reset dan buzzer aktif kembali. Jika lebih dari satu parameter memenuhi kondisi berbeda, sistem menampilkan status tertinggi (Critical > Warning > Normal).
 
