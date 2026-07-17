@@ -1,3 +1,6 @@
+[wokwi]
+version = 1
+
 [[package]]
 name = "Adafruit SSD1306"
 version = "2.5.7"
