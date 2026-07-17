@@ -1,5 +1,6 @@
 [wokwi]
 version = 1
+elf = "build/Wokwi.ino.elf"
 
 [[package]]
 name = "Adafruit SSD1306"
