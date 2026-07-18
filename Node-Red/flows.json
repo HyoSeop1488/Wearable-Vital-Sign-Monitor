@@ -38,8 +38,8 @@
     {
         "id": "mqtt_broker",
         "type": "mqtt-broker",
-        "name": "test.mosquitto.org",
-        "broker": "test.mosquitto.org",
+        "name": "broker.emqx.io",
+        "broker": "broker.emqx.io",
         "port": 1883,
         "clientid": "nodered_vitalmon",
         "autoConnect": true,
@@ -502,6 +502,33 @@
         "broker": "mqtt_broker",
         "x": 480,
         "y": 800,
+        "wires": []
+    },
+    {
+        "id": "mqtt_in_cmd",
+        "type": "mqtt in",
+        "name": "Cmd Resp",
+        "topic": "hospital/patient/001/cmd",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "mqtt_broker",
+        "x": 120,
+        "y": 1080,
+        "wires": [["cmd_response_display"]]
+    },
+    {
+        "id": "cmd_response_display",
+        "type": "ui_text",
+        "name": "Command Response",
+        "group": "grp_controls",
+        "order": 6,
+        "width": 6,
+        "height": 4,
+        "label": "Command Response",
+        "format": "<pre style=\"font-size:12px; background:#2c3e50; color:#ecf0f1; padding:8px; border-radius:4px;\">{{msg.payload}}</pre>",
+        "layout": "row-center",
+        "x": 320,
+        "y": 1080,
         "wires": []
     }
 ]

@@ -240,10 +240,11 @@ Wiring diagram Wokwi: ESP32 DevKit + OLED SSD1306 + 3 LED + 3 resistor + buzzer.
 
 ### `flows.json`
 Flow Node-RED lengkap dengan:
-- MQTT input untuk `vitals`, `alarm`, `state`, `presence`
+- MQTT input untuk `vitals`, `alarm`, `state`, `presence`, `cmd`
 - Split & route data ke gauge, chart, status banner
 - Alarm table + toast notification
 - Control buttons: PING, GET STATE, REBOOT, THRESHOLDS, ACK ALARM
+- Command response display — tampilkan reply `GET_THRESHOLDS` dari ESP32
 - Presence change detection (hanya update jika value berubah)
 
 ### `libraries.txt` / `wokwi.toml`
