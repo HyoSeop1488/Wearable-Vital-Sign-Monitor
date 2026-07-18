@@ -38,8 +38,8 @@
     {
         "id": "v2_mqtt_broker",
         "type": "mqtt-broker",
-        "name": "test.mosquitto.org",
-        "broker": "test.mosquitto.org",
+        "name": "broker.emqx.io",
+        "broker": "broker.emqx.io",
         "port": 1883,
         "clientid": "nodered_vitalmon",
         "autoConnect": true,
@@ -506,6 +506,49 @@
         "broker": "v2_mqtt_broker",
         "x": 480,
         "y": 800,
+        "wires": []
+    },
+    {
+        "id": "v2_inject_init_offline",
+        "type": "inject",
+        "name": "Init Offline",
+        "props": [{"p": "payload"}, {"p": "topic", "vt": "str"}],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "offline",
+        "payloadType": "str",
+        "x": 470,
+        "y": 520,
+        "wires": [["v2_presence_colorizer"]]
+    },
+    {
+        "id": "v2_mqtt_in_cmd",
+        "type": "mqtt in",
+        "name": "Cmd Resp",
+        "topic": "hospital/patient/001/cmd",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "v2_mqtt_broker",
+        "x": 120,
+        "y": 1080,
+        "wires": [["v2_cmd_response_display"]]
+    },
+    {
+        "id": "v2_cmd_response_display",
+        "type": "ui_text",
+        "name": "Command Response",
+        "group": "v2_grp_controls",
+        "order": 6,
+        "width": 6,
+        "height": 4,
+        "label": "Command Response",
+        "format": "<pre style=\"font-size:12px; background:#2c3e50; color:#ecf0f1; padding:8px; border-radius:4px;\">{{msg.payload}}</pre>",
+        "layout": "row-center",
+        "x": 320,
+        "y": 1080,
         "wires": []
     }
 ]
