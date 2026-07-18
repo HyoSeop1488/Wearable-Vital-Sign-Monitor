@@ -434,32 +434,90 @@ WiFiManager            @ 2.0.14
 
 ---
 
-## 📥 Cara Import Flow Node-RED
+## 📥 Cara Install & Import Flow Node-RED
 
-### Prasyarat
+### 1. Install Node.js (Jika Belum Ada)
 
-Install Node-RED dan palette:
 ```bash
-npm install -g node-red
+# Linux (Debian/Ubuntu)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Cek versi
+node -v   # minimal v18
+npm -v
 ```
-Buka Node-RED → **Menu ☰ → Manage Palette → Install:**
-- `node-red-dashboard`
 
-### Langkah Import
+### 2. Install Node-RED + Dashboard
 
-1. Buka Node-RED di browser: `http://localhost:1880`
-2. Klik **Menu ☰ → Import**
+```bash
+npm install -g node-red node-red-dashboard
+```
+
+### 3. Jalankan Node-RED
+
+```bash
+node-red
+```
+
+Buka browser: `http://localhost:1880`
+
+### 4. Import Flow
+
+1. Buka `http://localhost:1880`
+2. Klik **Menu ☰** (kanan atas) → **Import**
 3. Salin seluruh isi file `Node-Red/flows.json`
 4. Paste ke dialog import → klik **Import**
 5. Klik **Deploy** (tombol merah kanan atas)
-6. Buka dashboard di: `http://localhost:1880/ui`
 
-### Konfigurasi MQTT Broker
+### 5. Dashboard
 
-Flow `Node-Red/flows.json` sudah dikonfigurasi untuk `broker.emqx.io:1883`. Jika ingin mengganti broker:
+Buka dashboard di: `http://localhost:1880/ui`
+
+### Konfigurasi MQTT Broker (Jika Perlu)
+
+Flow sudah dikonfigurasi untuk `broker.emqx.io:1883`. Jika ingin ganti broker:
 1. Klik dua kali node **MQTT Broker** (`broker.emqx.io`)
-2. Ubah **Server** dan **Port** sesuai broker Anda
+2. Ubah **Server** dan **Port**
 3. Klik **Update** → **Deploy**
+
+---
+
+## 📊 Struktur Dashboard
+
+### Tab: Vital Sign Monitor
+
+| Group | Widget | Data Source |
+|---|---|---|
+| **Patient Status** | Status Banner (color-coded) | `state` topic |
+| | SpO2 Gauge (80-100%, segmen 90/94) | `vitals.spo2` |
+| | HR Gauge (30-160 bpm, segmen 50/60/100/120) | `vitals.heart_rate` |
+| | Temp Gauge (35-41°C, segmen 37.5/38.5) | `vitals.temperature` |
+| | Vitals Timeline Chart (300s window) | `vitals` |
+| **Alarms & Events** | Alarm Log Table | `alarm` topic |
+| | Alarm Toast Notification | `alarm` topic |
+| | Device Connection Status | `presence` topic |
+| **Controls** | PING Button | → `cmd` |
+| | GET STATE Button | → `cmd` |
+| | REBOOT Button | → `cmd` |
+| | THRESHOLDS Button | → `cmd` |
+| | ACK ALARM Button | → `cmd` |
+| | Command Response Display | ← `cmd` reply |
+
+### Alur Data
+
+```
+broker.emqx.io
+  │
+  ├─ hospital/patient/001/vitals    ──► SpO2 Gauge, HR Gauge, Temp Gauge, Chart
+  ├─ hospital/patient/001/state     ──► Status Banner (hijau/kuning/merah)
+  ├─ hospital/patient/001/alarm     ──► Alarm Table + Toast Notification
+  ├─ hospital/patient/001/presence  ──► Connection Status (online/offline)
+  └─ hospital/patient/001/cmd       ──► Command Response Display
+       ◄── PING / GET_STATE / REBOOT / GET_THRESHOLDS / ACK_ALARM
+
+Node-RED Dashboard: http://localhost:1880/ui
+```
 
 ---
 
