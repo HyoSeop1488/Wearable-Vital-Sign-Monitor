@@ -1,5 +1,5 @@
 /**
- * @file    Sketch.ino
+ * @file    Wokwi.ino
  * @brief   Program utama Wearable Vital Sign Monitor
  * @project IoT Dev Comp TETI 2026
  *
@@ -107,17 +107,8 @@ const char* getTimestamp();
 void setup() {
   Serial.begin(115200);
 
-  /* Watchdog Timer: init sebelum splash screen untuk melindungi setup */
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0)
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 15000,
-    .idle_core_mask = 0,
-    .trigger_panic = true,
-  };
-  esp_task_wdt_init(&wdt_config);
-#else
-  esp_task_wdt_init(15000, true);
-#endif
+  /* Daftarkan loop task ke WDT (WDT sudah diinit ESP-IDF dengan timeout default).
+     Nanti dilepas sementara di connectWifi() agar WiFiManager blocking aman. */
   enableLoopWDT();
 
   /* Inisialisasi pin aktuator */
@@ -293,7 +284,8 @@ void loop() {
         /* M6: Reset hysteresis counter saat CSV read gagal */
         g_hysteresisCount = 0;
       }
-      updateOled();  /* selalu refresh OLED dalam publish cycle */
+      g_lastOledActivity = millis();
+      updateOled();
     } else {
       updateOled();
     }
@@ -596,31 +588,33 @@ void updateOled() {
 
   /* SpO2 */
   display.setTextSize(1);
-  display.setCursor(OLED_SPO2_X, OLED_SPO2_Y);
-  display.print("SpO2 :");
+  display.setCursor(OLED_LABEL_X, OLED_SPO2_Y);
+  display.print("SpO2");
+  display.setCursor(OLED_VALUE_X, OLED_SPO2_Y - 2);
   display.setTextSize(2);
-  display.setCursor(OLED_SPO2_VALUE_X, OLED_SPO2_Y - 2);
   display.print((int)round(g_spo2Value));
   display.setTextSize(1);
-  display.print(" %");
+  display.print("%");
 
   /* Heart Rate */
   display.setTextSize(1);
-  display.setCursor(OLED_HR_X, OLED_HR_Y);
-  display.print("HR   :");
+  display.setCursor(OLED_LABEL_X, OLED_HR_Y);
+  display.print("HR");
+  display.setCursor(OLED_VALUE_X, OLED_HR_Y - 2);
   display.setTextSize(2);
-  display.setCursor(OLED_HR_VALUE_X, OLED_HR_Y - 2);
   display.print(g_heartRate);
   display.setTextSize(1);
-  display.print(" bpm");
+  display.print("bpm");
 
   /* Suhu Tubuh */
   display.setTextSize(1);
-  display.setCursor(OLED_TEMP_X, OLED_TEMP_Y);
-  display.print("Temp :");
-  display.setCursor(OLED_TEMP_VALUE_X, OLED_TEMP_Y);
+  display.setCursor(OLED_LABEL_X, OLED_TEMP_Y);
+  display.print("Temp");
+  display.setCursor(OLED_VALUE_X, OLED_TEMP_Y - 2);
+  display.setTextSize(2);
   display.print(g_tempValue, 1);
-  display.print(" C");
+  display.setTextSize(1);
+  display.print("C");
 
   /* Indikator MQTT sudah di-draw di header bar di atas */
   display.display();
@@ -632,13 +626,11 @@ void updateOled() {
 /*  setiap PUBLISH_INTERVAL ms.                                       */
 /* ================================================================== */
 void printSerial() {
-  Serial.println("==============================");
-  Serial.printf("SpO2       : %.1f %%\n",  g_spo2Value);
-  Serial.printf("Heart Rate : %d bpm\n",    g_heartRate);
-  Serial.printf("Suhu       : %.1f degC\n", g_tempValue);
-  Serial.printf("Status     : %s\n",        g_patientStatus);
-  Serial.printf("MQTT       : %s\n",        mqttIsConnected() ? "Connected" : "Offline");
-  Serial.println("==============================");
+  Serial.print("\r\n==============================\r\n");
+  Serial.printf("SpO2: %.1f%% | HR: %d bpm | Suhu: %.1f C | Status: %s | MQTT: %s\r\n",
+                g_spo2Value, g_heartRate, g_tempValue, g_patientStatus,
+                mqttIsConnected() ? "Connected" : "Offline");
+  Serial.print("==============================\r\n");
 }
 
 /* ================================================================== */
@@ -667,7 +659,8 @@ void logToSpiffs(float spo2, int hr, float temp, const char* status, const char*
   logFile.close();
 
   g_logLineCount++;
-  Serial.printf("[LOG]   Data tersimpan (%zu/%zu): %s", g_logLineCount, DATA_LOG_MAX_LINES, line);
+  line[strcspn(line, "\n")] = 0;
+  Serial.printf("[LOG] Data tersimpan (%zu/%zu): %s\r\n", g_logLineCount, DATA_LOG_MAX_LINES, line);
 }
 
 /* ================================================================== */
@@ -695,7 +688,7 @@ void replayDataLog() {
     return;
   }
 
-  Serial.printf("[LOG]   Replay %zu bytes data log...\n", size);
+  Serial.printf("[LOG] Replay %zu bytes data log...\r\n", size);
 
   char line[128];
   int replayed = 0;
@@ -718,7 +711,7 @@ void replayDataLog() {
     int parsed = sscanf(line, "%f,%d,%f,%15[^,],%24[^\n]", &spo2, &hr, &temp, status, ts);
 
     if (!mqttIsConnected()) {
-      Serial.printf("[LOG]   MQTT disconnect — replay dibatalkan (%d replayed)\n", replayed);
+      Serial.printf("[LOG] MQTT disconnect - replay dibatalkan (%d replayed)\r\n", replayed);
       logFile.close();
       return;
     }
@@ -733,7 +726,7 @@ void replayDataLog() {
       replayed++;
       delay(50);
     } else {
-      Serial.printf("[LOG]   Parse error (fields=%d): %s\n", parsed, line);
+      Serial.printf("[LOG] Parse error (fields=%d): %s\r\n", parsed, line);
     }
   }
   logFile.close();
@@ -743,5 +736,5 @@ void replayDataLog() {
     lastReplayStatus[0] = '\0';
   }
 
-  Serial.printf("[LOG]   Replay selesai: %d data terpublish\n", replayed);
+  Serial.printf("[LOG] Replay selesai: %d data terpublish\r\n", replayed);
 }

@@ -72,15 +72,11 @@ extern const char* OTA_PASSWORD;
 #define OLED_STATUS_X       2
 #define OLED_STATUS_Y       3
 #define OLED_STATUS_H       13
-#define OLED_SPO2_X         0
-#define OLED_SPO2_VALUE_X   50
-#define OLED_SPO2_Y         17
-#define OLED_HR_X           0
-#define OLED_HR_VALUE_X     50
-#define OLED_HR_Y           35
-#define OLED_TEMP_X         0
-#define OLED_TEMP_VALUE_X   50
-#define OLED_TEMP_Y         53
+#define OLED_LABEL_X        0
+#define OLED_VALUE_X        55
+#define OLED_SPO2_Y         16
+#define OLED_HR_Y           34
+#define OLED_TEMP_Y         52
 #define OLED_MQTT_X         120
 #define OLED_MQTT_Y         3
 

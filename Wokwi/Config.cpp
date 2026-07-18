@@ -20,7 +20,7 @@ const char* WIFI_AP_PASS = "config123";
 /*  MQTT Broker — test.mosquitto.org (broker publik Eclipse)          */
 /*  Untuk produksi: ganti ke broker sendiri + auth + TLS (port 8883). */
 /* ------------------------------------------------------------------ */
-const char*    MQTT_BROKER     = "test.mosquitto.org";
+const char*    MQTT_BROKER     = "broker.emqx.io";
 const uint16_t MQTT_PORT       = 1883;
 const uint16_t MQTT_TLS_PORT   = 8883;
 /* MQTT_USE_TLS ada di Config.h sebagai #define */

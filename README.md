@@ -70,7 +70,9 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 | 🥶 **Hypothermia Detection** | Deteksi suhu tubuh rendah dengan threshold Warning/Critical sendiri |
 | 🔄 **OTA Update** | Update firmware over-the-air tanpa kabel USB |
 | ⏱️ **Watchdog Timer** | Reset otomatis jika loop hang >15 detik |
-| 💤 **OLED Sleep** | Matikan OLED setelah 30 detik idle untuk menghemat daya |
+| 💤 **OLED Sleep** | Matikan OLED setelah 30 detik idle (timer reset tiap data read) |
+| 🛑 **Non-blocking MQTT Retry** | Reconnect non-blocking, retry tiap 30 detik, tidak ganggu loop CSV |
+| 📜 **Wokwi-compat Serial** | Output `\r\n` + single-line log — rapi di terminal Wokwi |
 
 ---
 
@@ -102,7 +104,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 ┌────────────────────────────────────────────────────────────────┐
 │                      BROKER LAYER                              │
 │                                                                │
-│             test.mosquitto.org : 1883 / 8883 (TLS)             │
+│             broker.emqx.io : 1883 / 8883 (TLS)             │
 │                                                                │
 │          Topics: hospital/patient/001/{vitals,alarm,           │
 │                    state,presence,cmd}                         │
@@ -160,7 +162,7 @@ Project IOT/
 ├── README.md               # Dokumentasi proyek
 │
 ├── Wokwi/                  # Source code ESP32 + konfigurasi simulator
-│   ├── Sketch.ino              # Program utama (setup, loop, OLED, aktuator)
+│   ├── Wokwi.ino               # Program utama (setup, loop, OLED, aktuator)
 │   ├── Config.h                # Semua konstanta: WiFi, MQTT, PIN, threshold
 │   ├── Config.cpp              # Definisi konstanta runtime
 │   ├── MQTT_handler.h          # Header modul MQTT (public API)
@@ -182,7 +184,7 @@ Project IOT/
 ### `Config.h`
 Seluruh konfigurasi sistem dalam bentuk `extern` constants dan `#define`:
 - **WiFi**: SSID, password, AP name/pass untuk WiFiManager
-- **MQTT**: broker address (`test.mosquitto.org`), port (1883/8883), keepalive
+- **MQTT**: broker address (`broker.emqx.io`), port (1883/8883), keepalive
 - **Topics**: `TOPIC_VITALS`, `TOPIC_ALARM`, `TOPIC_STATE`, `TOPIC_PRESENCE`, `TOPIC_CMD`
 - **Pin definitions**: semua GPIO ESP32 untuk LED, buzzer, OLED
 - **OLED**: konstanta layout posisi tiap elemen tampilan
@@ -213,7 +215,7 @@ void mqttResetAlarmAck();
 ### `MQTT_handler.cpp`
 Implementasi lengkap modul koneksi dan komunikasi:
 - **WiFi**: WiFiManager autoConnect dengan fallback ke `WIFI_SSID`/`WIFI_PASS` dari Config
-- **MQTT**: koneksi ke `test.mosquitto.org` dengan auto reconnect, LWT presence, re-subscribe
+- **MQTT**: koneksi ke `broker.emqx.io` dengan auto reconnect (non-blocking, retry 30s), LWT presence, re-subscribe
 - **Callback**: parsing command case-insensitive dengan queue response (re-entrancy safe)
 - **NVS Persistence**: threshold tersimpan di NVS dengan debounce 5s
 - **Unique Client ID**: digenerate dari MAC address (`esp32_patient_XXXXXXXX`)
@@ -221,7 +223,7 @@ Implementasi lengkap modul koneksi dan komunikasi:
 - **SET_THRESHOLD**: 8 threshold dapat diubah via macro, divalidasi range sebelum disimpan
 - **GET_THRESHOLDS**: reply JSON semua threshold ke `TOPIC_CMD`
 
-### `Sketch.ino`
+### `Wokwi.ino`
 Program utama yang mengatur alur sistem:
 - **setup()**: inisialisasi pin, SPIFFS, OLED splash, OTA, watchdog, MQTT
 - **loop()**: maintain koneksi → baca CSV → filter → tentukan status → aktuator → publish
@@ -229,7 +231,7 @@ Program utama yang mengatur alur sistem:
 - **applyMovingAverage()**: rata-rata buffer 5 sampel untuk transisi halus
 - **determinePatientStatus()**: evaluasi threshold 2-level + hysteresis 2 siklus
 - **handleActuators()**: kontrol LED 3 warna + buzzer non-blocking (Critical: rapid 600ms, Warning: slow 2000ms)
-- **updateOled()**: render layout menggunakan konstanta posisi dari Config, sleep 30s idle
+- **updateOled()**: render layout rapi (label kiri, value di X=55, semua angka text size 2), sleep 30s idle
 - **logToSpiffs()**: simpan data ke SPIFFS saat MQTT offline + auto rotation 500 baris
 - **replayDataLog()**: publish ulang data yang terlewat setelah reconnect + WDT reset
 
@@ -415,7 +417,7 @@ WiFiManager            @ 2.0.14
 2. Hapus konten default
 3. Salin isi `Wokwi/diagram.json` ke tab **diagram.json** di Wokwi
 4. Salin seluruh file kode dari folder `Wokwi/` ke tab yang sesuai:
-   - `Sketch.ino` → tab **Sketch.ino**
+   - `Wokwi.ino` → tab **Wokwi.ino**
    - `Config.h` → tab **Config.h**
    - `Config.cpp` → tab **Config.cpp**
    - `MQTT_handler.h` → tab **MQTT_handler.h**
@@ -453,8 +455,8 @@ Buka Node-RED → **Menu ☰ → Manage Palette → Install:**
 
 ### Konfigurasi MQTT Broker
 
-Flow `Node-Red/flows.json` sudah dikonfigurasi untuk `test.mosquitto.org:1883`. Jika ingin mengganti broker:
-1. Klik dua kali node **MQTT Broker** (`test.mosquitto.org`)
+Flow `Node-Red/flows.json` sudah dikonfigurasi untuk `broker.emqx.io:1883`. Jika ingin mengganti broker:
+1. Klik dua kali node **MQTT Broker** (`broker.emqx.io`)
 2. Ubah **Server** dan **Port** sesuai broker Anda
 3. Klik **Update** → **Deploy**
 
@@ -580,7 +582,7 @@ Mengganti dataset CSV dengan sensor MAX30102 dan MLX90614 via I2C.
 
 Proyek **Wearable Vital Sign Monitor** berhasil mengimplementasikan pipeline IoT end-to-end yang lengkap: dataset CSV → ESP32 → MQTT Broker → Node-RED Dashboard. Sistem mendukung remote konfigurasi threshold, data logging fallback, replay otomatis, dan three-level alert dengan buzzer yang dapat di-ACK dari jarak jauh.
 
-Arsitektur modular (`Config` / `MQTT_handler` / `Sketch`) memastikan maintainability dan kemudahan ekspansi ke sensor nyata, database time-series, atau dashboard yang lebih canggih tanpa mengubah firmware secara fundamental.
+Arsitektur modular (`Config` / `MQTT_handler` / `Wokwi.ino`) memastikan maintainability dan kemudahan ekspansi ke sensor nyata, database time-series, atau dashboard yang lebih canggih tanpa mengubah firmware secara fundamental.
 
 ---
 

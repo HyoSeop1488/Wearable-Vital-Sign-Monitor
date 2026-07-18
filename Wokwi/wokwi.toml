@@ -1,6 +1,7 @@
 [wokwi]
 version = 1
-firmware = "build/Wokwi.ino.elf"
+firmware = "build/Wokwi.ino.merged.bin"
+elf = "build/Wokwi.ino.elf"
 
 [[package]]
 name = "Adafruit SSD1306"

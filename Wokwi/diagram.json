@@ -75,6 +75,8 @@
     }
   ],
   "connections": [
+    ["esp:TX", "$serialMonitor:RX", "", []],
+    ["esp:RX", "$serialMonitor:TX", "", []],
     ["esp:3V3", "oled:VCC", "red", []],
     ["esp:GND.1", "oled:GND", "black", ["h-19.05", "v-288", "h230.2"]],
     ["esp:21", "oled:SDA", "green", []],
@@ -99,5 +101,9 @@
     ["res_green:1", "bb:24t.d", "", ["$bb"]],
     ["res_green:2", "bb:30t.d", "", ["$bb"]]
   ],
-  "dependencies": {}
+  "dependencies": {},
+  "serialMonitor": {
+    "display": "always",
+    "convertEol": true
+  }
 }
