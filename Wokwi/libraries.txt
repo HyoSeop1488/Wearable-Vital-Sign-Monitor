@@ -1,19 +1,5 @@
-# Libraries -- Wearable Vital Sign Monitor
-# IoT Dev Comp TETI 2026
-#
-# Instalasi via Arduino IDE:
-#   Sketch -> Include Library -> Manage Libraries -> cari nama di bawah
-#
-# Instalasi via Wokwi (wokwi.toml):
-#   [[package]]
-#   name = "<nama library>"
-#   version = "<versi>"
-#
-# Catatan: FS.h dan SPIFFS.h sudah termasuk dalam ESP32 Arduino Core,
-# tidak perlu diinstall secara terpisah.
-
-Adafruit SSD1306     @ 2.5.7
-Adafruit GFX Library @ 1.11.5
-PubSubClient         @ 2.8.0
-ArduinoJson          @ 6.21.2
-WiFiManager          @ 2.0.14
+Adafruit SSD1306
+Adafruit GFX Library
+PubSubClient
+ArduinoJson
+WiFiManager
