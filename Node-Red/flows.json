@@ -337,10 +337,26 @@
         "wires": []
     },
     {
+        "id": "inject_init_offline",
+        "type": "inject",
+        "name": "Init Offline",
+        "props": [{"p": "payload"}, {"p": "topic", "vt": "str"}],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "offline",
+        "payloadType": "str",
+        "x": 470,
+        "y": 520,
+        "wires": [["presence_colorizer"]]
+    },
+    {
         "id": "presence_colorizer",
         "type": "function",
         "name": "Colorize Presence",
-        "func": "// N9: change detection — hanya kirim jika value berubah\nvar prev = context.get('prev_presence');\nif (prev === msg.payload) return null;\ncontext.set('prev_presence', msg.payload);\nmsg.color = msg.payload === 'online' ? '#2ecc71' : '#e74c3c';\nreturn msg;",
+        "func": "// Change detection — skip if value unchanged\nvar prev = context.get('prev_presence');\nif (prev === msg.payload && msg.payload !== undefined) return null;\ncontext.set('prev_presence', msg.payload);\nmsg.color = msg.payload === 'online' ? '#2ecc71' : '#e74c3c';\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "x": 480,
