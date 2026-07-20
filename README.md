@@ -94,7 +94,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 │                              Normal / Warning / Critical        │
 │                              │                                  │
 │                              ▼                                  │
-│    MQTT Publish: vitals / alarm / state / presence              │
+│    MQTT Publish: vitals / alarm / state / presence / feedback   │
 │    MQTT Subscribe: cmd (PING, REBOOT, GET_STATE,                │
 │                    GET_THRESHOLDS, SET_THRESHOLD_*, ACK_ALARM)  │
 └──────────────────────────┬──────────────────────────────────────┘
@@ -107,7 +107,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 │             broker.emqx.io : 1883 / 8883 (TLS)             │
 │                                                                │
 │          Topics: hospital/patient/001/{vitals,alarm,           │
-│                    state,presence,cmd}                         │
+│                    state,presence,cmd,feedback}                 │
 └──────────────────────────┬─────────────────────────────────────┘
                            │ MQTT Subscribe
                            ▼
@@ -118,7 +118,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 │            ──► Line Chart Tren                                 │
 │            ──► Patient Status Banner (color-coded)             │
 │            ──► Alarm Log Table                                 │
-│            ──► Toast Notification                              │
+│            ──► Alarm Notification (color-coded bar)            │
 │            ──► Control Buttons (PING, GET STATE, REBOOT,       │
 │                 THRESHOLDS, ACK ALARM)                         │
 └────────────────────────────────────────────────────────────────┘
@@ -185,7 +185,7 @@ Project IOT/
 Seluruh konfigurasi sistem dalam bentuk `extern` constants dan `#define`:
 - **WiFi**: SSID, password, AP name/pass untuk WiFiManager
 - **MQTT**: broker address (`broker.emqx.io`), port (1883/8883), keepalive
-- **Topics**: `TOPIC_VITALS`, `TOPIC_ALARM`, `TOPIC_STATE`, `TOPIC_PRESENCE`, `TOPIC_CMD`
+- **Topics**: `TOPIC_VITALS`, `TOPIC_ALARM`, `TOPIC_STATE`, `TOPIC_PRESENCE`, `TOPIC_CMD`, `TOPIC_FEEDBACK`
 - **Pin definitions**: semua GPIO ESP32 untuk LED, buzzer, OLED
 - **OLED**: konstanta layout posisi tiap elemen tampilan
 - **Threshold**: batas Normal / Warning / Critical + validasi range
@@ -221,7 +221,7 @@ Implementasi lengkap modul koneksi dan komunikasi:
 - **Unique Client ID**: digenerate dari MAC address (`esp32_patient_XXXXXXXX`)
 - **JSON Serialization**: menggunakan `StaticJsonDocument` (stack, no heap fragmentation)
 - **SET_THRESHOLD**: 8 threshold dapat diubah via macro, divalidasi range sebelum disimpan
-- **GET_THRESHOLDS**: reply JSON semua threshold ke `TOPIC_CMD`
+- **GET_THRESHOLDS**: reply JSON semua threshold ke `TOPIC_FEEDBACK`
 
 ### `Wokwi.ino`
 Program utama yang mengatur alur sistem:
@@ -240,11 +240,11 @@ Wiring diagram Wokwi: ESP32 DevKit + OLED SSD1306 + 3 LED + 3 resistor + buzzer.
 
 ### `flows.json`
 Flow Node-RED lengkap dengan:
-- MQTT input untuk `vitals`, `alarm`, `state`, `presence`, `cmd`
+- MQTT input untuk `vitals`, `alarm`, `state`, `presence`, `feedback`
 - Split & route data ke gauge, chart, status banner
-- Alarm table + toast notification
+- Alarm table + alarm notification bar (color-coded via ui_template)
 - Control buttons: PING, GET STATE, REBOOT, THRESHOLDS, ACK ALARM
-- Command response display — tampilkan reply `GET_THRESHOLDS` dari ESP32
+- Command response display — tampilkan reply dari ESP32 (topic feedback)
 - Presence change detection (hanya update jika value berubah)
 
 ### `libraries.txt` / `wokwi.toml`
@@ -271,7 +271,8 @@ hospital/
         ├── alarm       ← Event saat transisi Warning / Critical
         ├── state       ← Retained state pasien
         ├── presence    ← LWT online/offline + PING response
-        └── cmd         ← Command masuk (subscribe)
+        ├── cmd         ← Command masuk (subscribe)
+        └── feedback    ← Response command (GET_THRESHOLDS, ACK_ALARM)
 ```
 
 ### Payload: `hospital/patient/001/vitals`
@@ -311,6 +312,31 @@ LWT + presence:
 - **online** — saat connect / PING response
 - **offline** — LWT (broker publish otomatis jika ESP disconnect mendadak)
 
+### Payload: `hospital/patient/001/feedback`
+
+Response dari command ESP32 (GET_THRESHOLDS, ACK_ALARM):
+
+```json
+{
+  "cmd": "THRESHOLDS",
+  "spo2_warn": 94.0,
+  "spo2_crit": 90.0,
+  "hr_warn_low": 60,
+  "hr_warn_high": 100,
+  "hr_crit_low": 50,
+  "hr_crit_high": 120,
+  "temp_warn": 37.5,
+  "temp_crit": 38.5,
+  "temp_warn_low": 36.0,
+  "temp_crit_low": 35.0
+}
+```
+
+Contoh response ACK_ALARM:
+```json
+{"cmd":"ACK_ALARM","status":"ok"}
+```
+
 ### Field Description
 
 | Field | Tipe | Satuan | Keterangan |
@@ -332,7 +358,7 @@ Perintah dikirim ke `hospital/patient/001/cmd`. Case-insensitive.
 |---|---|---|
 | `PING` | `PING` | `"online"` ke `presence` |
 | `GET_STATE` | `GET_STATE` | State terakhir ke `state` |
-| `GET_THRESHOLDS` | `GET_THRESHOLDS` | JSON semua threshold ke `cmd` |
+| `GET_THRESHOLDS` | `GET_THRESHOLDS` | JSON semua threshold ke `feedback` |
 | `SET_THRESHOLD_SPO2_WARN:<val>` | `SET_THRESHOLD_SPO2_WARN:93` | Ubah SpO₂ warning (80-100) |
 | `SET_THRESHOLD_SPO2_CRIT:<val>` | `SET_THRESHOLD_SPO2_CRIT:88` | Ubah SpO₂ critical (80-100) |
 | `SET_THRESHOLD_HR_WARN_LOW:<val>` | `SET_THRESHOLD_HR_WARN_LOW:55` | Ubah HR warning low (20-250) |
@@ -495,14 +521,14 @@ Flow sudah dikonfigurasi untuk `broker.emqx.io:1883`. Jika ingin ganti broker:
 | | Temp Gauge (35-41°C, segmen 37.5/38.5) | `vitals.temperature` |
 | | Vitals Timeline Chart (300s window) | `vitals` |
 | **Alarms & Events** | Alarm Log Table | `alarm` topic |
-| | Alarm Toast Notification | `alarm` topic |
+| | Alarm Notification Bar (color-coded) | `alarm` topic |
 | | Device Connection Status | `presence` topic |
 | **Controls** | PING Button | → `cmd` |
 | | GET STATE Button | → `cmd` |
 | | REBOOT Button | → `cmd` |
 | | THRESHOLDS Button | → `cmd` |
 | | ACK ALARM Button | → `cmd` |
-| | Command Response Display | ← `cmd` reply |
+| | Command Response Display | ← `feedback` topic |
 
 ### Alur Data
 
@@ -511,10 +537,11 @@ broker.emqx.io
   │
   ├─ hospital/patient/001/vitals    ──► SpO2 Gauge, HR Gauge, Temp Gauge, Chart
   ├─ hospital/patient/001/state     ──► Status Banner (hijau/kuning/merah)
-  ├─ hospital/patient/001/alarm     ──► Alarm Table + Toast Notification
+  ├─ hospital/patient/001/alarm     ──► Alarm Table + Alarm Notification Bar
   ├─ hospital/patient/001/presence  ──► Connection Status (online/offline)
-  └─ hospital/patient/001/cmd       ──► Command Response Display
-       ◄── PING / GET_STATE / REBOOT / GET_THRESHOLDS / ACK_ALARM
+  ├─ hospital/patient/001/cmd       ──► Command Out ke ESP32
+  │    ◄── PING / GET_STATE / REBOOT / GET_THRESHOLDS / ACK_ALARM
+  └─ hospital/patient/001/feedback  ──► Command Response Display
 
 Node-RED Dashboard: http://localhost:1880/ui
 ```
@@ -545,7 +572,7 @@ Node-RED Dashboard: http://localhost:1880/ui
 - OLED menampilkan `STATUS: Critical`
 - LED **merah** menyala
 - **Buzzer beep cepat** setiap 600ms
-- Dashboard: status banner merah, alarm log baru, toast notification
+- Dashboard: status banner merah, alarm log baru, alarm notification bar merah
 
 ### Skenario 4 — Remote ACK Alarm + Threshold
 

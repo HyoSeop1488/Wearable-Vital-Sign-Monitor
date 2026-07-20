@@ -1,107 +1,80 @@
 [
     {
-        "id": "grp_status",
-        "type": "ui_group",
-        "name": "Patient Status",
-        "tab": "tab_dash",
-        "order": 1,
-        "disp": true,
-        "width": 6
-    },
-    {
-        "id": "grp_alarms",
-        "type": "ui_group",
-        "name": "Alarms & Events",
-        "tab": "tab_dash",
-        "order": 2,
-        "disp": true,
-        "width": 6
-    },
-    {
-        "id": "grp_controls",
-        "type": "ui_group",
-        "name": "Controls",
-        "tab": "tab_dash",
-        "order": 3,
-        "disp": true,
-        "width": 6
-    },
-    {
-        "id": "tab_dash",
-        "type": "ui_tab",
-        "name": "Vital Sign Monitor",
-        "icon": "dashboard",
-        "order": 1,
+        "id": "a8a7fa4c4a35f970",
+        "type": "tab",
+        "label": "Flow 1",
         "disabled": false,
-        "hidden": false
+        "info": "",
+        "env": []
     },
     {
-        "id": "mqtt_broker",
-        "type": "mqtt-broker",
-        "name": "broker.emqx.io",
-        "broker": "broker.emqx.io",
-        "port": 1883,
-        "clientid": "nodered_vitalmon",
-        "autoConnect": true,
-        "usetls": false,
-        "protocol": "mqtt://",
-        "keepalive": "60",
-        "cleansession": true,
-        "birthTopic": "",
-        "birthQos": "0",
-        "birthPayload": "",
-        "closeTopic": "",
-        "closeQos": "0",
-        "closePayload": "",
-        "willTopic": "",
-        "willQos": "0",
-        "willPayload": ""
-    },
-    {
-        "id": "mqtt_in_vitals",
+        "id": "c988b66383bf",
         "type": "mqtt in",
+        "z": "a8a7fa4c4a35f970",
         "name": "Vitals",
         "topic": "hospital/patient/001/vitals",
         "qos": "1",
         "datatype": "string",
-        "broker": "mqtt_broker",
-        "x": 120,
-        "y": 100,
-        "wires": [["json_vitals"]]
+        "broker": "98e261722fbc",
+        "inputs": 0,
+        "x": 410,
+        "y": 120,
+        "wires": [
+            [
+                "ea445657f783"
+            ]
+        ]
     },
     {
-        "id": "json_vitals",
+        "id": "ea445657f783",
         "type": "json",
+        "z": "a8a7fa4c4a35f970",
         "name": "Parse JSON",
         "property": "payload",
         "action": "",
         "pretty": false,
-        "x": 280,
-        "y": 100,
-        "wires": [["split_vitals"]]
+        "x": 610,
+        "y": 120,
+        "wires": [
+            [
+                "d71f970c1452"
+            ]
+        ]
     },
     {
-        "id": "split_vitals",
+        "id": "d71f970c1452",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Split & Route",
         "func": "if (!msg.payload) return null;\n\n// Store in flow context for chart\nflow.set('spo2',      msg.payload.spo2);\nflow.set('heart_rate', msg.payload.heart_rate);\nflow.set('temperature', msg.payload.temperature);\nflow.set('status',    msg.payload.patient_status);\n\n// Route copies to each widget\nreturn [\n    { payload: msg.payload.spo2 },\n    { payload: msg.payload.heart_rate },\n    { payload: msg.payload.temperature },\n    { payload: msg.payload.patient_status },\n    msg  // original for chart\n];",
         "outputs": 5,
         "noerr": 0,
-        "x": 440,
-        "y": 100,
+        "x": 810,
+        "y": 120,
         "wires": [
-            ["gauge_spo2"],
-            ["gauge_hr"],
-            ["gauge_temp"],
-            ["status_colorizer"],
-            ["chart_prep"]
+            [
+                "7d1446db2a70"
+            ],
+            [
+                "267b9ee62a5e"
+            ],
+            [
+                "e81debb39558"
+            ],
+            [
+                "9aaf20c74ad4"
+            ],
+            [
+                "9f0bbc3c6217"
+            ]
         ]
     },
     {
-        "id": "gauge_spo2",
+        "id": "7d1446db2a70",
         "type": "ui_gauge",
+        "z": "a8a7fa4c4a35f970",
         "name": "SpO2",
-        "group": "grp_status",
+        "group": "129d8ddbf5f2",
         "order": 2,
         "width": 2,
         "height": 4,
@@ -111,18 +84,23 @@
         "format": "{{value}}",
         "min": 80,
         "max": 100,
-        "colors": ["#e74c3c", "#f39c12", "#2ecc71"],
+        "colors": [
+            "#e74c3c",
+            "#f39c12",
+            "#2ecc71"
+        ],
         "seg1": 90,
         "seg2": 94,
-        "x": 620,
-        "y": 60,
+        "x": 1230,
+        "y": 40,
         "wires": []
     },
     {
-        "id": "gauge_hr",
+        "id": "267b9ee62a5e",
         "type": "ui_gauge",
+        "z": "a8a7fa4c4a35f970",
         "name": "Heart Rate",
-        "group": "grp_status",
+        "group": "129d8ddbf5f2",
         "order": 3,
         "width": 2,
         "height": 4,
@@ -132,20 +110,25 @@
         "format": "{{value}}",
         "min": 30,
         "max": 160,
-        "colors": ["#e74c3c", "#f39c12", "#2ecc71", "#f39c12", "#e74c3c"],
+        "colors": [
+            "#e74c3c",
+            "#f39c12",
+            "#2ecc71",
+            "#f39c12",
+            "#e74c3c"
+        ],
         "seg1": 50,
         "seg2": 60,
-        "seg3": 100,
-        "seg4": 120,
-        "x": 620,
-        "y": 120,
+        "x": 1250,
+        "y": 80,
         "wires": []
     },
     {
-        "id": "gauge_temp",
+        "id": "e81debb39558",
         "type": "ui_gauge",
+        "z": "a8a7fa4c4a35f970",
         "name": "Temperature",
-        "group": "grp_status",
+        "group": "129d8ddbf5f2",
         "order": 4,
         "width": 2,
         "height": 4,
@@ -155,33 +138,39 @@
         "format": "{{value}}",
         "min": 35,
         "max": 41,
-        "colors": ["#2ecc71", "#f39c12", "#e74c3c"],
+        "colors": [
+            "#2ecc71",
+            "#f39c12",
+            "#e74c3c"
+        ],
         "seg1": 37.5,
         "seg2": 38.5,
-        "x": 620,
+        "x": 1250,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "614f950783ac",
+        "type": "ui_text",
+        "z": "a8a7fa4c4a35f970",
+        "group": "129d8ddbf5f2",
+        "order": 1,
+        "width": 6,
+        "height": 2,
+        "name": "Status",
+        "label": "Patient Status",
+        "format": "{{msg.payload}}",
+        "layout": "row-center",
+        "x": 1230,
         "y": 180,
         "wires": []
     },
     {
-        "id": "text_status",
-        "type": "ui_text",
-        "name": "Status",
-        "group": "grp_status",
-        "order": 1,
-        "width": 6,
-        "height": 2,
-        "label": "Patient Status",
-        "format": "{{msg.payload}}",
-        "layout": "row-center",
-        "x": 620,
-        "y": 240,
-        "wires": []
-    },
-    {
-        "id": "chart_vitals",
+        "id": "f4a9c35dc255",
         "type": "ui_chart",
+        "z": "a8a7fa4c4a35f970",
         "name": "Vitals Timeline",
-        "group": "grp_status",
+        "group": "129d8ddbf5f2",
         "order": 5,
         "width": 6,
         "height": 6,
@@ -196,151 +185,234 @@
         "removeOlder": 300,
         "removeOlderPoints": "",
         "removeOlderUnit": "60",
-        "cutaxis": "cut",
-        "colors": ["#3498db", "#e74c3c", "#2ecc71"],
+        "colors": [
+            "#3498db",
+            "#e74c3c",
+            "#2ecc71"
+        ],
+        "outputs": 1,
         "useDifferentColor": true,
-        "x": 620,
-        "y": 300,
-        "wires": []
+        "x": 1260,
+        "y": 220,
+        "wires": [
+            []
+        ]
     },
     {
-        "id": "chart_prep",
+        "id": "9f0bbc3c6217",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Prepare Chart Data",
-        "func": "var spo2 = flow.get('spo2') || 0;\nvar hr   = flow.get('heart_rate') || 0;\nvar temp = flow.get('temperature') || 0;\n\nif (spo2 === 0) return null;\n\nvar ts = msg.payload && msg.payload.timestamp\n    ? msg.payload.timestamp\n    : new Date().toISOString();\n\nreturn [\n    { payload: spo2, topic: 'SpO2' },\n    { payload: hr,   topic: 'Heart Rate' },\n    { payload: temp, topic: 'Temperature' }\n];",
+        "func": "var spo2 = flow.get('spo2') || 0;\nvar hr   = flow.get('heart_rate') || 0;\nvar temp = flow.get('temperature') || 0;\n\nif (spo2 === 0) return null;\n\nnode.send({ payload: spo2, topic: 'SpO2' });\nnode.send({ payload: hr, topic: 'Heart Rate' });\nnode.send({ payload: temp, topic: 'Temperature' });\n\nreturn null;",
         "outputs": 1,
         "noerr": 0,
-        "x": 440,
-        "y": 300,
-        "wires": [["chart_vitals"]]
+        "x": 1050,
+        "y": 220,
+        "wires": [
+            [
+                "f4a9c35dc255"
+            ]
+        ]
     },
     {
-        "id": "status_colorizer",
+        "id": "9aaf20c74ad4",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Colorize Status",
         "func": "var color = '#2ecc71';\nif (msg.payload === 'Warning')  color = '#f39c12';\nif (msg.payload === 'Critical') color = '#e74c3c';\nmsg.payload = '<span style=\"font-size:24px; font-weight:bold; color:' + color + '\">' + msg.payload + '</span>';\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 440,
-        "y": 240,
-        "wires": [["text_status"]]
+        "x": 1040,
+        "y": 180,
+        "wires": [
+            [
+                "614f950783ac"
+            ]
+        ]
     },
     {
-        "id": "mqtt_in_state",
+        "id": "8a386c81ed06",
         "type": "mqtt in",
+        "z": "a8a7fa4c4a35f970",
         "name": "State",
         "topic": "hospital/patient/001/state",
         "qos": "0",
         "datatype": "auto-detect",
-        "broker": "mqtt_broker",
-        "x": 120,
-        "y": 240,
-        "wires": [["status_colorizer"]]
+        "broker": "98e261722fbc",
+        "inputs": 0,
+        "x": 410,
+        "y": 180,
+        "wires": [
+            [
+                "9aaf20c74ad4"
+            ]
+        ]
     },
     {
-        "id": "mqtt_in_alarm",
+        "id": "b0c7ab974e05",
         "type": "mqtt in",
+        "z": "a8a7fa4c4a35f970",
         "name": "Alarm",
         "topic": "hospital/patient/001/alarm",
         "qos": "1",
-        "datatype": "auto-detect",
-        "broker": "mqtt_broker",
-        "x": 120,
-        "y": 400,
-        "wires": [["json_alarm"]]
+        "datatype": "string",
+        "broker": "98e261722fbc",
+        "inputs": 0,
+        "x": 410,
+        "y": 280,
+        "wires": [
+            [
+                "741309ded610"
+            ]
+        ]
     },
     {
-        "id": "json_alarm",
+        "id": "741309ded610",
         "type": "json",
+        "z": "a8a7fa4c4a35f970",
         "name": "Parse Alarm",
         "property": "payload",
         "action": "",
         "pretty": false,
-        "x": 280,
-        "y": 400,
-        "wires": [["alarm_format"]]
-    },
-    {
-        "id": "alarm_format",
-        "type": "function",
-        "name": "Format Alarm",
-        "func": "if (!msg.payload) return null;\n\nvar alarm = msg.payload;\nvar ts = alarm.timestamp || new Date().toISOString();\nvar color = alarm.alarm_status === 'Critical' ? '#e74c3c' : '#f39c12';\n\nmsg.payload = {\n    alarm: alarm.alarm_status,\n    spo2: alarm.spo2,\n    heart_rate: alarm.heart_rate,\n    temperature: alarm.temperature,\n    timestamp: ts\n};\n\n// Also send notification toast\nreturn [\n    msg,\n    { payload: '\uD83D\uDEA8 ' + alarm.alarm_status + ' Alarm! SpO2:' + alarm.spo2 + '% HR:' + alarm.heart_rate + ' Temp:' + alarm.temperature + '\u00B0C' }\n];",
-        "outputs": 2,
-        "noerr": 0,
-        "x": 440,
-        "y": 400,
+        "x": 610,
+        "y": 280,
         "wires": [
-            ["alarm_table"],
-            ["alarm_toast"]
+            [
+                "d8b99af189fa"
+            ]
         ]
     },
     {
-        "id": "alarm_table",
+        "id": "d8b99af189fa",
+        "type": "function",
+        "z": "a8a7fa4c4a35f970",
+        "name": "Format Alarm",
+        "func": "if (!msg.payload || typeof msg.payload !== 'object' || !msg.payload.alarm_status) return null;\n\nvar alarm = msg.payload;\n\nvar ts = new Date().toLocaleTimeString('id-ID');\n\nvar tableMsg = {\n    payload: {\n        command: \"addRow\",\n        arguments: [\n            { alarm: alarm.alarm_status, spo2: alarm.spo2, heart_rate: alarm.heart_rate, temperature: alarm.temperature, timestamp: ts },\n            true\n        ]\n    }\n};\n\nvar alarmColor = '#2ecc71';\nvar alarmText = '\\u2713 Normal | SpO2: ' + alarm.spo2 + '% HR: ' + alarm.heart_rate + ' Temp: ' + alarm.temperature + '\\u00B0C';\n\nif (alarm.alarm_status === 'Critical') {\n    alarmColor = '#e74c3c';\n    alarmText = '\\uD83D\\uDEA8 ' + alarm.alarm_status + ' Alarm! SpO2: ' + alarm.spo2 + '% HR: ' + alarm.heart_rate + ' Temp: ' + alarm.temperature + '\\u00B0C';\n} else if (alarm.alarm_status === 'Warning') {\n    alarmColor = '#f39c12';\n    alarmText = '\\u26A0\\uFE0F ' + alarm.alarm_status + ' Alarm! SpO2: ' + alarm.spo2 + '% HR: ' + alarm.heart_rate + ' Temp: ' + alarm.temperature + '\\u00B0C';\n}\n\nvar alarmBarMsg = {\n    payload: {\n        text: alarmText,\n        color: alarmColor\n    }\n};\n\nreturn [tableMsg, alarmBarMsg];",
+        "outputs": 2,
+        "noerr": 0,
+        "x": 1040,
+        "y": 280,
+        "wires": [
+            [
+                "2c84c7401444"
+            ],
+            [
+                "98482e12398f"
+            ]
+        ]
+    },
+    {
+        "id": "2c84c7401444",
         "type": "ui_table",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3d7b91204964",
         "name": "Alarm Log",
-        "group": "grp_alarms",
         "order": 1,
         "width": 6,
         "height": 8,
         "columns": [
-            {"title": "Timestamp", "field": "timestamp", "width": 30},
-            {"title": "Alarm",     "field": "alarm",     "width": 15},
-            {"title": "SpO2",      "field": "spo2",      "width": 10},
-            {"title": "HR",        "field": "heart_rate","width": 10},
-            {"title": "Temp",      "field": "temperature","width": 15}
+            {
+                "title": "Time",
+                "field": "timestamp",
+                "width": ""
+            },
+            {
+                "title": "Alarm",
+                "field": "alarm",
+                "width": ""
+            },
+            {
+                "title": "SpO2",
+                "field": "spo2",
+                "width": ""
+            },
+            {
+                "title": "HR",
+                "field": "heart_rate",
+                "width": ""
+            },
+            {
+                "title": "Temp",
+                "field": "temperature",
+                "width": ""
+            }
         ],
         "outputs": 1,
         "cts": true,
-        "x": 620,
-        "y": 400,
-        "wires": []
+        "x": 1250,
+        "y": 260,
+        "wires": [
+            []
+        ]
     },
     {
-        "id": "alarm_toast",
-        "type": "ui_toast",
+        "id": "98482e12398f",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3d7b91204964",
         "name": "Alarm Notification",
-        "group": "grp_alarms",
         "order": 2,
-        "width": 0,
-        "height": 0,
-        "position": "top-right",
-        "duration": "10000",
-        "x": 620,
-        "y": 460,
-        "wires": []
+        "width": 6,
+        "height": 2,
+        "format": "<div ng-style=\"{'backgroundColor': msg.payload.color}\" style=\"color: #ffffff; padding: 12px; border-radius: 4px; text-align: center; font-weight: bold; font-size: 16px; width: 100%;\">{{msg.payload.text}}</div>",
+        "templateScope": "local",
+        "className": "",
+        "x": 1270,
+        "y": 300,
+        "wires": [
+            []
+        ]
     },
     {
-        "id": "mqtt_in_presence",
+        "id": "677d26f545d4",
         "type": "mqtt in",
+        "z": "a8a7fa4c4a35f970",
         "name": "Presence",
         "topic": "hospital/patient/001/presence",
         "qos": "1",
         "datatype": "auto-detect",
-        "broker": "mqtt_broker",
-        "x": 120,
-        "y": 560,
-        "wires": [["presence_colorizer"]]
+        "broker": "98e261722fbc",
+        "inputs": 0,
+        "x": 420,
+        "y": 360,
+        "wires": [
+            [
+                "e5de64937c82"
+            ]
+        ]
     },
     {
-        "id": "presence_text",
-        "type": "ui_text",
+        "id": "62a27a9bcee8",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3d7b91204964",
         "name": "Connection Status",
-        "group": "grp_alarms",
         "order": 3,
         "width": 6,
         "height": 2,
-        "label": "Device Connection",
-        "format": "{{msg.payload}}",
-        "layout": "row-center",
-        "x": 340,
-        "y": 560,
-        "wires": []
+        "format": "<div style=\"font-size: 16px; color: #ffffff; text-align: center; width: 100%;\">Device Connection <span style=\"font-weight: bold; color: {{msg.payload.color}};\">{{msg.payload.text}}</span></div>",
+        "templateScope": "local",
+        "className": "",
+        "x": 1270,
+        "y": 360,
+        "wires": [
+            []
+        ]
     },
     {
-        "id": "inject_init_offline",
+        "id": "50c10177d991",
         "type": "inject",
+        "z": "a8a7fa4c4a35f970",
         "name": "Init Offline",
-        "props": [{"p": "payload"}, {"p": "topic", "vt": "str"}],
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
         "repeat": "",
         "crontab": "",
         "once": true,
@@ -348,215 +420,347 @@
         "topic": "",
         "payload": "offline",
         "payloadType": "str",
-        "x": 470,
-        "y": 520,
-        "wires": [["presence_colorizer"]]
+        "x": 430,
+        "y": 420,
+        "wires": [
+            [
+                "e5de64937c82"
+            ]
+        ]
     },
     {
-        "id": "presence_colorizer",
+        "id": "e5de64937c82",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Colorize Presence",
-        "func": "var prev = context.get('prev_presence');\nif (prev === msg.payload && msg.payload !== undefined) return null;\ncontext.set('prev_presence', msg.payload);\nvar color = msg.payload === 'online' ? '#2ecc71' : '#e74c3c';\nmsg.payload = '<span style=\"font-size:18px; color:' + color + '\">' + msg.payload + '</span>';\nreturn msg;",
+        "func": "var prev = context.get('prev_presence');\nif (prev === msg.payload && msg.payload !== undefined) return null;\ncontext.set('prev_presence', msg.payload);\nvar color = msg.payload === 'online' ? '#2ecc71' : '#e74c3c';\nmsg.payload = { text: msg.payload, color: color };\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 480,
-        "y": 560,
-        "wires": [["presence_text"]]
+        "x": 1050,
+        "y": 360,
+        "wires": [
+            [
+                "62a27a9bcee8"
+            ]
+        ]
     },
     {
-        "id": "btn_ping",
-        "type": "ui_button",
-        "name": "PING",
-        "group": "grp_controls",
-        "order": 1,
-        "width": 2,
-        "height": 2,
-        "label": "PING",
-        "icon": "wifi",
-        "tooltip": "Kirim PING ke device",
-        "color": "",
-        "bgcolor": "",
-        "className": "",
-        "x": 120,
-        "y": 700,
-        "wires": [["cmd_ping"]]
-    },
-    {
-        "id": "cmd_ping",
+        "id": "c716aaee8be8",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Format PING",
         "func": "msg.payload = 'PING';\nmsg.topic = 'hospital/patient/001/cmd';\nmsg.qos = 0;\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 280,
-        "y": 700,
-        "wires": [["mqtt_out_cmd"]]
+        "x": 810,
+        "y": 540,
+        "wires": [
+            [
+                "b7b4796bb52d"
+            ]
+        ]
     },
     {
-        "id": "btn_get_state",
-        "type": "ui_button",
-        "name": "GET_STATE",
-        "group": "grp_controls",
-        "order": 2,
-        "width": 2,
-        "height": 2,
-        "label": "GET STATE",
-        "icon": "info",
-        "tooltip": "Minta state terakhir",
-        "color": "",
-        "bgcolor": "",
-        "className": "",
-        "x": 120,
-        "y": 780,
-        "wires": [["cmd_get_state"]]
-    },
-    {
-        "id": "cmd_get_state",
+        "id": "5d312b1ecffe",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Format GET_STATE",
         "func": "msg.payload = 'GET_STATE';\nmsg.topic = 'hospital/patient/001/cmd';\nmsg.qos = 0;\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 280,
-        "y": 780,
-        "wires": [["mqtt_out_cmd"]]
+        "x": 840,
+        "y": 600,
+        "wires": [
+            [
+                "b7b4796bb52d"
+            ]
+        ]
     },
     {
-        "id": "btn_reboot",
-        "type": "ui_button",
-        "name": "REBOOT",
-        "group": "grp_controls",
-        "order": 3,
-        "width": 2,
-        "height": 2,
-        "label": "REBOOT",
-        "icon": "power_settings_new",
-        "tooltip": "Reboot device ESP32",
-        "color": "",
-        "bgcolor": "#e74c3c",
-        "className": "",
-        "x": 120,
-        "y": 860,
-        "wires": [["cmd_reboot"]]
-    },
-    {
-        "id": "cmd_reboot",
+        "id": "ae6e5df260ec",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Format REBOOT",
         "func": "msg.payload = 'REBOOT';\nmsg.topic = 'hospital/patient/001/cmd';\nmsg.qos = 0;\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 280,
-        "y": 860,
-        "wires": [["mqtt_out_cmd"]]
+        "x": 830,
+        "y": 660,
+        "wires": [
+            [
+                "b7b4796bb52d"
+            ]
+        ]
     },
     {
-        "id": "btn_thresholds",
-        "type": "ui_button",
-        "name": "GET_THRESHOLDS",
-        "group": "grp_controls",
-        "order": 4,
-        "width": 2,
-        "height": 2,
-        "label": "THRESHOLDS",
-        "icon": "tune",
-        "tooltip": "Tampilkan threshold saat ini",
-        "color": "",
-        "bgcolor": "#9b59b6",
-        "className": "",
-        "x": 120,
-        "y": 940,
-        "wires": [["cmd_thresholds"]]
-    },
-    {
-        "id": "cmd_thresholds",
+        "id": "f2c7c723f8af",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Format GET_THRESHOLDS",
         "func": "msg.payload = 'GET_THRESHOLDS';\nmsg.topic = 'hospital/patient/001/cmd';\nmsg.qos = 0;\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 280,
-        "y": 940,
-        "wires": [["mqtt_out_cmd"]]
+        "x": 860,
+        "y": 720,
+        "wires": [
+            [
+                "b7b4796bb52d"
+            ]
+        ]
     },
     {
-        "id": "btn_ack_alarm",
-        "type": "ui_button",
-        "name": "ACK_ALARM",
-        "group": "grp_controls",
-        "order": 5,
-        "width": 2,
-        "height": 2,
-        "label": "ACK ALARM",
-        "icon": "check_circle",
-        "tooltip": "Acknowledge alarm (silence buzzer)",
-        "color": "",
-        "bgcolor": "#f39c12",
-        "className": "",
-        "x": 120,
-        "y": 1000,
-        "wires": [["cmd_ack"]]
-    },
-    {
-        "id": "cmd_ack",
+        "id": "ef2f76078abc",
         "type": "function",
+        "z": "a8a7fa4c4a35f970",
         "name": "Format ACK_ALARM",
         "func": "msg.payload = 'ACK_ALARM';\nmsg.topic = 'hospital/patient/001/cmd';\nmsg.qos = 0;\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 280,
-        "y": 1000,
-        "wires": [["mqtt_out_cmd"]]
+        "x": 840,
+        "y": 780,
+        "wires": [
+            [
+                "b7b4796bb52d"
+            ]
+        ]
     },
     {
-        "id": "mqtt_out_cmd",
+        "id": "b7b4796bb52d",
         "type": "mqtt out",
+        "z": "a8a7fa4c4a35f970",
         "name": "Command Out",
         "topic": "",
         "qos": "0",
         "retain": "false",
-        "broker": "mqtt_broker",
-        "x": 480,
-        "y": 800,
+        "broker": "98e261722fbc",
+        "x": 1260,
+        "y": 640,
         "wires": []
     },
     {
-        "id": "mqtt_in_feedback",
+        "id": "959ec00f9651",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3fbb481f7ef9",
+        "name": "PING",
+        "order": 1,
+        "width": 2,
+        "height": 2,
+        "format": "<div style=\"height:100%\"><button ng-click=\"send({payload:'PING'})\" style=\"background-color:#3498db;color:white;width:100%;height:100%;margin:0;padding:0;font-weight:bold;font-size:14px;border-radius:2px;text-transform:uppercase;cursor:pointer;\"><i class=\"material-icons\">wifi</i>&nbsp;PING</button></div>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": false,
+        "templateScope": "local",
+        "className": "",
+        "x": 410,
+        "y": 540,
+        "wires": [
+            [
+                "c716aaee8be8"
+            ]
+        ]
+    },
+    {
+        "id": "a69f40bde7dd",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3fbb481f7ef9",
+        "name": "GET STATE",
+        "order": 2,
+        "width": 2,
+        "height": 2,
+        "format": "<div style=\"height:100%\"><button ng-click=\"send({payload:'GET_STATE'})\" style=\"background-color:#2ecc71;color:white;width:100%;height:100%;margin:0;padding:0;font-weight:bold;font-size:14px;border-radius:2px;text-transform:uppercase;cursor:pointer;\"><i class=\"material-icons\">info</i>&nbsp;GET STATE</button></div>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": false,
+        "templateScope": "local",
+        "className": "",
+        "x": 430,
+        "y": 600,
+        "wires": [
+            [
+                "5d312b1ecffe"
+            ]
+        ]
+    },
+    {
+        "id": "78e278411e2d",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3fbb481f7ef9",
+        "name": "REBOOT",
+        "order": 3,
+        "width": 2,
+        "height": 2,
+        "format": "<div style=\"height:100%\"><button ng-click=\"send({payload:'REBOOT'})\" style=\"background-color:#e74c3c;color:white;width:100%;height:100%;margin:0;padding:0;font-weight:bold;font-size:14px;border-radius:2px;text-transform:uppercase;cursor:pointer;\"><i class=\"material-icons\">power_settings_new</i>&nbsp;REBOOT</button></div>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": false,
+        "templateScope": "local",
+        "className": "",
+        "x": 420,
+        "y": 660,
+        "wires": [
+            [
+                "ae6e5df260ec"
+            ]
+        ]
+    },
+    {
+        "id": "cc51824f4e49",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3fbb481f7ef9",
+        "name": "THRESHOLDS",
+        "order": 4,
+        "width": 2,
+        "height": 2,
+        "format": "<div style=\"height:100%\"><button ng-click=\"send({payload:'THRESHOLDS'})\" style=\"background-color:#9b59b6;color:white;width:100%;height:100%;margin:0;padding:0;font-weight:bold;font-size:14px;border-radius:2px;text-transform:uppercase;cursor:pointer;\"><i class=\"material-icons\">tune</i>&nbsp;THRESHOLDS</button></div>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": false,
+        "templateScope": "local",
+        "className": "",
+        "x": 440,
+        "y": 720,
+        "wires": [
+            [
+                "f2c7c723f8af"
+            ]
+        ]
+    },
+    {
+        "id": "294f4fac716c",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "3fbb481f7ef9",
+        "name": "ACK ALARM",
+        "order": 5,
+        "width": 2,
+        "height": 2,
+        "format": "<div style=\"height:100%\"><button ng-click=\"send({payload:'ACK_ALARM'})\" style=\"background-color:#f39c12;color:white;width:100%;height:100%;margin:0;padding:0;font-weight:bold;font-size:14px;border-radius:2px;text-transform:uppercase;cursor:pointer;\"><i class=\"material-icons\">check_circle</i>&nbsp;ACK ALARM</button></div>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": false,
+        "templateScope": "local",
+        "className": "",
+        "x": 430,
+        "y": 780,
+        "wires": [
+            [
+                "ef2f76078abc"
+            ]
+        ]
+    },
+    {
+        "id": "4344cd70d754",
         "type": "mqtt in",
+        "z": "a8a7fa4c4a35f970",
         "name": "Feedback",
         "topic": "hospital/patient/001/feedback",
         "qos": "0",
         "datatype": "auto-detect",
-        "broker": "mqtt_broker",
-        "x": 120,
-        "y": 1040,
-        "wires": [["cmd_response_display"]]
+        "broker": "98e261722fbc",
+        "inputs": 0,
+        "x": 420,
+        "y": 900,
+        "wires": [
+            [
+                "150e30763d14"
+            ]
+        ]
     },
     {
-        "id": "mqtt_in_cmd",
-        "type": "mqtt in",
-        "name": "Cmd Resp",
-        "topic": "hospital/patient/001/cmd",
-        "qos": "0",
-        "datatype": "auto-detect",
-        "broker": "mqtt_broker",
-        "x": 120,
-        "y": 1120,
-        "wires": [["cmd_response_display"]]
-    },
-    {
-        "id": "cmd_response_display",
-        "type": "ui_text",
+        "id": "150e30763d14",
+        "type": "ui_template",
+        "z": "a8a7fa4c4a35f970",
+        "group": "91df11b3a0f3",
         "name": "Command Response",
-        "group": "grp_controls",
-        "order": 6,
+        "order": 1,
         "width": 6,
         "height": 4,
-        "label": "Command Response",
-        "format": "<pre style=\"font-size:12px; background:#2c3e50; color:#ecf0f1; padding:8px; border-radius:4px;\">{{msg.payload}}</pre>",
-        "layout": "row-center",
-        "x": 320,
-        "y": 1080,
-        "wires": []
+        "format": "<pre style=\"font-size:12px; background:#2c3e50; color:#ecf0f1; padding:8px; border-radius:4px; white-space: pre-wrap; word-break: break-all; max-width: 100%; overflow-x: auto;\">{{msg.payload}}</pre>",
+        "templateScope": "local",
+        "className": "",
+        "x": 840,
+        "y": 900,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "98e261722fbc",
+        "type": "mqtt-broker",
+        "name": "broker.emqx.io",
+        "broker": "broker.emqx.io",
+        "port": 1883,
+        "clientid": "nodered_vitalmon",
+        "autoConnect": true,
+        "usetls": false,
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    },
+    {
+        "id": "129d8ddbf5f2",
+        "type": "ui_group",
+        "name": "Patient Status",
+        "tab": "3f8151441793",
+        "order": 1,
+        "disp": true,
+        "width": 6
+    },
+    {
+        "id": "3d7b91204964",
+        "type": "ui_group",
+        "name": "Alarms & Events",
+        "tab": "3f8151441793",
+        "order": 2,
+        "disp": true,
+        "width": 6
+    },
+    {
+        "id": "3fbb481f7ef9",
+        "type": "ui_group",
+        "name": "Controls",
+        "tab": "3f8151441793",
+        "order": 3,
+        "disp": true,
+        "width": 6
+    },
+    {
+        "id": "91df11b3a0f3",
+        "type": "ui_group",
+        "name": "Command Response",
+        "tab": "3f8151441793",
+        "order": 4,
+        "disp": true,
+        "width": 6
+    },
+    {
+        "id": "3f8151441793",
+        "type": "ui_tab",
+        "name": "Vital Sign Monitor",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "1aedb05157fe2a51",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6",
+            "node-red-node-ui-table": "0.4.5"
+        }
     }
 ]

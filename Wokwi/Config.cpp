@@ -25,7 +25,7 @@ const uint16_t MQTT_PORT       = 1883;
 const uint16_t MQTT_TLS_PORT   = 8883;
 /* MQTT_USE_TLS ada di Config.h sebagai #define */
 /* MQTT_CLIENT_ID digenerate dinamis di MQTT_handler.cpp */
-const int      MQTT_KEEPALIVE_SEC  = 60;
+const int      MQTT_KEEPALIVE_SEC  = 15;
 
 /* ------------------------------------------------------------------ */
 /*  MQTT Topics                                                        */
