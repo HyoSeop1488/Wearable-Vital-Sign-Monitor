@@ -307,8 +307,6 @@ Sistem menggunakan dua level threshold per parameter dengan evaluasi prioritas C
 
 Jika lebih dari satu parameter memenuhi kondisi berbeda, sistem menampilkan status tertinggi (Critical > Warning > Normal).
 
----
-
 ## 5. Link Repository
 
 **GitHub:** [https://github.com/HyoSeop1488/Wearable-Vital-Sign-Monitor](https://github.com/HyoSeop1488/Wearable-Vital-Sign-Monitor)
@@ -317,6 +315,18 @@ Repository ini berisi seluruh source code proyek:
 - **Wokwi/** — Firmware ESP32 (Wokwi.ino, Config.h/cpp, MQTT_handler.h/cpp, diagram.json, vitals.csv)
 - **Node-Red/** — Flow dashboard (flows.json)
 - **Presentation.md** — Dokumen presentasi ini
+
+---
+
+## 6. Link Demonstrasi
+
+**Google Drive:** [https://drive.google.com/drive/folders/105Ej6OU-wZalZIZSvadgsUb7nOv8lq6x](https://drive.google.com/drive/folders/105Ej6OU-wZalZIZSvadgsUb7nOv8lq6x)
+
+Folder ini berisi dokumentasi visual proyek:
+- **Diagram.png** — Diagram arsitektur sistem
+- **Diagram-Custom_Chip.png** — Diagram custom chip MAX30102 + MLX90614
+- **Dashboard_Node-Red.png** — Tampilan dashboard Node-RED
+- **flow_Node-Red.png** — Tampilan flow Node-RED
 
 ---
 
