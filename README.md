@@ -104,10 +104,10 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 ┌────────────────────────────────────────────────────────────────┐
 │                      BROKER LAYER                              │
 │                                                                │
-│             broker.emqx.io : 1883 / 8883 (TLS)             │
+│             broker.emqx.io : 1883 / 8883 (TLS)                 │
 │                                                                │
 │          Topics: hospital/patient/001/{vitals,alarm,           │
-│                    state,presence,cmd,feedback}                 │
+│                    state,presence,cmd,feedback}                │
 └──────────────────────────┬─────────────────────────────────────┘
                            │ MQTT Subscribe
                            ▼
@@ -431,11 +431,11 @@ Sistem menggunakan **dua level threshold** per parameter. Evaluasi dilakukan dar
 
 Install library berikut via **Arduino IDE → Manage Libraries**:
 ```
-Adafruit SSD1306       @ 2.5.7
-Adafruit GFX Library   @ 1.11.5
-PubSubClient           @ 2.8.0
-ArduinoJson            @ 6.21.2
-WiFiManager            @ 2.0.14
+Adafruit SSD1306
+Adafruit GFX Library
+PubSubClient
+ArduinoJson
+WiFiManager
 ```
 
 ### Langkah di Wokwi
