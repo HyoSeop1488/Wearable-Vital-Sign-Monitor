@@ -1,0 +1,27 @@
+{
+  "name": "mlx90614",
+  "author": "IoT Dev Comp TETI 2026",
+  "pins": ["VCC", "GND", "SCL", "SDA"],
+  "width": 45,
+  "height": 45,
+  "controls": [
+    {
+      "id": "ambient_temp",
+      "type": "slider",
+      "label": "Ambient Temperature",
+      "min": -40,
+      "max": 125,
+      "step": 0.1,
+      "default": 25
+    },
+    {
+      "id": "object_temp",
+      "type": "slider",
+      "label": "Object Temperature (°C)",
+      "min": 34,
+      "max": 42,
+      "step": 0.1,
+      "default": 36.5
+    }
+  ]
+}
