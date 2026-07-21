@@ -319,11 +319,12 @@ Repository ini berisi seluruh source code proyek:
 
 ---
 
-## 6. Link Demonstrasi
+## 6. Link Documentation
 
 **Google Drive:** [https://drive.google.com/drive/folders/105Ej6OU-wZalZIZSvadgsUb7nOv8lq6x](https://drive.google.com/drive/folders/105Ej6OU-wZalZIZSvadgsUb7nOv8lq6x)
 
 Folder ini berisi dokumentasi visual proyek:
+- **Demo_project.mp4** — Video demo Wearable Vital Sign Monitor
 - **Diagram.png** — Diagram arsitektur sistem
 - **Diagram-Custom_Chip.png** — Diagram custom chip MAX30102 + MLX90614
 - **Dashboard_Node-Red.png** — Tampilan dashboard Node-RED
