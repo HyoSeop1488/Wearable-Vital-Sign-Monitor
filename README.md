@@ -29,6 +29,8 @@
 - [Screenshots](#-screenshots)
 - [Hasil yang Diharapkan saat Demo](#-hasil-yang-diharapkan-saat-demo)
 - [Future Enhancement](#-future-enhancement)
+- [Link Repository](#-link-repository)
+- [Link Documentation](#-link-documentation)
 - [Kesimpulan](#-kesimpulan)
 
 ---
@@ -48,7 +50,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 - Menyajikan informasi melalui dashboard Node-RED dengan gauge, chart tren, dan tabel alarm
 - Mengimplementasikan sistem alert tiga level: **Normal**, **Warning**, dan **Critical**
 - Menyediakan mekanisme data logging fallback saat MQTT offline + replay otomatis
-- Mendukung konfigurasi threshold jarak jauh via MQTT commands
+- Menampilkan response command ESP32 pada dashboard (Command Response Display)
 
 ---
 
@@ -63,7 +65,7 @@ Proyek ini dikembangkan sebagai bagian dari **IoT Development Competition TETI U
 | 💾 **Data Logging Fallback** | Data tersimpan ke SPIFFS saat MQTT offline, replay otomatis setelah reconnect |
 | 🧮 **Moving Average Filter** | Filter 5 sampel untuk transisi status yang lebih halus |
 | 🔁 **Auto Reconnect** | WiFiManager dengan fallback credentials + auto-reconnect MQTT |
-| 🔧 **Remote Threshold Config** | Ubah threshold Warning/Critical dari dashboard via MQTT |
+| 🔧 **Remote Threshold Config** | Ubah threshold Warning/Critical via MQTT client eksternal (belum ada UI dashboard) |
 | 🔔 **ACK Alarm** | Silent buzzer dari dashboard tanpa mengubah status |
 | 🔐 **Unique Client ID** | Client ID digenerate dari MAC address untuk menghindari konflik broker |
 | 📝 **NVS Persistence** | Threshold tersimpan di NVS, tetap bertahan setelah reboot |
@@ -372,6 +374,8 @@ Perintah dikirim ke `hospital/patient/001/cmd`. Case-insensitive.
 | `ACK_ALARM` | `ACK_ALARM` | Silent buzzer sampai status berubah |
 | `REBOOT` | `REBOOT` | Restart ESP32 dalam 1 detik |
 
+> **Catatan:** Perintah `SET_THRESHOLD_*` didukung oleh firmware ESP32 namun belum tersedia tombolnya di dashboard. Dapat dikirim manual melalui MQTT client eksternal.
+
 ### GET_THRESHOLDS Response Example
 ```json
 {
@@ -577,8 +581,8 @@ Node-RED Dashboard: http://localhost:1880/ui
 ### Skenario 4 — Remote ACK Alarm + Threshold
 
 1. Kirim `ACK_ALARM` dari dashboard → buzzer silent (status tetap Critical)
-2. Kirim `SET_THRESHOLD_SPO2_CRIT:85` → threshold critical turun jadi 85%
-3. Kirim `GET_THRESHOLDS` → konfirmasi perubahan
+2. Kirim `SET_THRESHOLD_SPO2_CRIT:85` via MQTT client eksternal → threshold critical turun jadi 85%
+3. Kirim `GET_THRESHOLDS` dari dashboard → konfirmasi perubahan
 
 ### Skenario 5 — MQTT Offline / Reconnect
 
@@ -664,9 +668,27 @@ Mengganti dataset CSV dengan sensor MAX30102 dan MLX90614 via I2C.
 
 ---
 
+## 📌 Link Repository
+
+**GitHub:** [https://github.com/HyoSeop1488/Wearable-Vital-Sign-Monitor](https://github.com/HyoSeop1488/Wearable-Vital-Sign-Monitor)
+
+---
+
+## 📌 Link Documentation
+
+**Google Drive:** [https://drive.google.com/drive/folders/105Ej6OU-wZalZIZSvadgsUb7nOv8lq6x](https://drive.google.com/drive/folders/105Ej6OU-wZalZIZSvadgsUb7nOv8lq6x)
+
+Folder ini berisi dokumentasi visual proyek:
+- **Demo_project.mp4** — Video demo Wearable Vital Sign Monitor
+- **Diagram.png** — Diagram arsitektur sistem
+- **Dashboard_Node-Red.png** — Tampilan dashboard Node-RED
+- **flow_Node-Red.png** — Tampilan flow Node-RED
+
+---
+
 ## 📌 Kesimpulan
 
-Proyek **Wearable Vital Sign Monitor** berhasil mengimplementasikan pipeline IoT end-to-end yang lengkap: dataset CSV → ESP32 → MQTT Broker → Node-RED Dashboard. Sistem mendukung remote konfigurasi threshold, data logging fallback, replay otomatis, dan three-level alert dengan buzzer yang dapat di-ACK dari jarak jauh.
+Proyek **Wearable Vital Sign Monitor** berhasil mengimplementasikan pipeline IoT end-to-end yang lengkap: dataset CSV → ESP32 → MQTT Broker → Node-RED Dashboard. Sistem mendukung data logging fallback, replay otomatis, dan three-level alert dengan buzzer yang dapat di-ACK dari jarak jauh melalui tombol kontrol dashboard.
 
 Arsitektur modular (`Config` / `MQTT_handler` / `Wokwi.ino`) memastikan maintainability dan kemudahan ekspansi ke sensor nyata, database time-series, atau dashboard yang lebih canggih tanpa mengubah firmware secara fundamental.
 
